@@ -1,4 +1,4 @@
-![Headlyn Logo](./assets/HEADLYN-BLUE-LOGO.png)
+<img src="./assets/HEADLYN-BLUE-LOGO.png" alt="Headlyn Logo" width="280" />
 
 # Headlyn
 
@@ -19,3 +19,6 @@ Headlyn is a modern news platform that turns fragmented article streams into a s
 ## Goal
 
 Help users follow news with less repetition, clearer context, and more relevant story discovery.
+
+> [!WARNING]
+> This project is currently under development.
