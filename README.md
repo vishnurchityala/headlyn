@@ -1,6 +1,7 @@
-<img src="./assets/HEADLYN-BLUE-LOGO.png" alt="Headlyn Logo" width="280" />
-
-# Headlyn
+<p align="center">
+  <img src="./assets/images/HEADLYN-BLUE-LOGO.png" alt="Headlyn Logo" width="450" />
+</p>
+ 
 
 Headlyn is a modern news platform that turns fragmented article streams into a structured, story-first feed. It groups similar articles about the same event into one evolving story while preserving source attribution.
 
