@@ -18,7 +18,7 @@ from scrape_article_utils import (
 
 SOURCE = "the-hindu"
 RSS_PATH = Path("assets/rss-feeds/raw/2026-05-28/the-hindu/feed.xml")
-OUTPUT_PATH = Path("assets/datasets/articles/the-hindu-2026-05-28.jsonl")
+OUTPUT_PATH = Path("assets/datasets/articles/the-hindu-2026-05-28.json")
 RAW_HTML_DIR = Path("assets/datasets/raw-html/the-hindu/2026-05-28")
 BROWSER_PROFILE_DIR = Path(".browser-profiles/the-hindu")
 LIMIT = 20
@@ -86,6 +86,7 @@ def scrape() -> None:
         RAW_HTML_DIR.mkdir(parents=True, exist_ok=True)
 
     extractor: ArticleExtractor = TheHinduArticleExtractor(source=SOURCE)
+    articles = []
     written = 0
 
     with PlaywrightArticleLoader(
@@ -96,7 +97,7 @@ def scrape() -> None:
         warmup_url=WARMUP_URL,
         browser_profile_dir=BROWSER_PROFILE_DIR,
         enable_read_more_clicks=ENABLE_READ_MORE_CLICKS,
-    ) as loader, OUTPUT_PATH.open("w", encoding="utf-8") as output:
+    ) as loader:
         for index, entry in enumerate(entries, start=1):
             print(f"[{index}/{len(entries)}] Fetching {entry.url}")
             try:
@@ -117,10 +118,14 @@ def scrape() -> None:
                 article = article_from_rss_entry(entry, utc_now_iso(), source=SOURCE)
                 print(f"  fallback: {exc}")
 
-            output.write(json.dumps(article, ensure_ascii=False) + "\n")
+            articles.append(article)
             written += 1
             print(f"  wrote: {article['title'][:100]}")
 
+    OUTPUT_PATH.write_text(
+        json.dumps(articles, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     print(f"Done. Wrote {written} articles to {OUTPUT_PATH}")
 
 
