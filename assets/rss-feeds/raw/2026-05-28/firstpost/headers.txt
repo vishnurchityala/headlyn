@@ -1,0 +1,13 @@
+HTTP/2 200 
+content-type: application/xml
+cache-control: public, must-revalidate, max-age=120
+date: Thu, 28 May 2026 07:24:45 GMT
+alt-svc: h3=":443"; ma=93600
+content-security-policy: style-src https: 'unsafe-inline'; script-src https: blob: 'unsafe-inline' 'unsafe-eval'; img-src https: data:; frame-src https:;
+strict-transport-security: max-age=86400 ; includeSubDomains
+access-control-max-age: 86400
+access-control-allow-credentials: false
+access-control-allow-headers: *
+access-control-allow-methods: GET,POST
+access-control-allow-origin: *
+

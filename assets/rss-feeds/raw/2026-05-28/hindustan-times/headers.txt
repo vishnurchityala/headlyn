@@ -1,0 +1,11 @@
+HTTP/2 200 
+content-type: application/xml;charset=UTF-8
+date: Thu, 28 May 2026 07:24:44 GMT
+set-cookie: ht-location=IN; path=/; domain=.hindustantimes.com
+set-cookie: Meta-Geo=IN--GJ--SURAT; path=/; domain=.hindustantimes.com
+cachettl: 
+alt-svc: h3=":443"; ma=93600
+strict-transport-security: max-age=63072000
+akamai-grn: 0.1c702c31.1779953084.456188
+x-frame-options: SAMEORIGIN
+

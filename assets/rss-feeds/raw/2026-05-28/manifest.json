@@ -1,0 +1,73 @@
+{
+  "captured_at_utc": "2026-05-28T07:23:38Z",
+  "category": "india-news",
+  "user_agent": "headlyn-static-dataset/0.1",
+  "feeds": [
+    {
+      "id": "hindustan-times",
+      "name": "Hindustan Times",
+      "url": "https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml",
+      "feed_path": "hindustan-times/feed.xml",
+      "headers_path": "hindustan-times/headers.txt",
+      "http_status": 200,
+      "content_type": "application/xml;charset=UTF-8",
+      "bytes": 95658,
+      "item_count": 100
+    },
+    {
+      "id": "firstpost",
+      "name": "Firstpost",
+      "url": "https://www.firstpost.com/commonfeeds/v1/mfp/rss/india.xml",
+      "feed_path": "firstpost/feed.xml",
+      "headers_path": "firstpost/headers.txt",
+      "http_status": 200,
+      "content_type": "application/xml",
+      "bytes": 221213,
+      "item_count": 200
+    },
+    {
+      "id": "the-hindu",
+      "name": "The Hindu",
+      "url": "https://www.thehindu.com/news/national/feeder/default.rss",
+      "feed_path": "the-hindu/feed.xml",
+      "headers_path": "the-hindu/headers.txt",
+      "http_status": 200,
+      "content_type": "application/xml",
+      "bytes": 49317,
+      "item_count": 60
+    },
+    {
+      "id": "ndtv",
+      "name": "NDTV",
+      "url": "https://feeds.feedburner.com/ndtvnews-india-news",
+      "feed_path": "ndtv/feed.xml",
+      "headers_path": "ndtv/headers.txt",
+      "http_status": 200,
+      "content_type": "text/xml; charset=utf-8",
+      "bytes": 27221,
+      "item_count": 20
+    },
+    {
+      "id": "pib",
+      "name": "Press Information Bureau",
+      "url": "https://www.pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=1&reg=1",
+      "feed_path": "pib/feed.xml",
+      "headers_path": "pib/headers.txt",
+      "http_status": 200,
+      "content_type": "text/xml",
+      "bytes": 4170,
+      "item_count": 20
+    },
+    {
+      "id": "news18",
+      "name": "News18",
+      "url": "https://www.news18.com/commonfeeds/v1/eng/rss/india.xml",
+      "feed_path": "news18/feed.xml",
+      "headers_path": "news18/headers.txt",
+      "http_status": 200,
+      "content_type": "application/xml",
+      "bytes": 209234,
+      "item_count": 200
+    }
+  ]
+}

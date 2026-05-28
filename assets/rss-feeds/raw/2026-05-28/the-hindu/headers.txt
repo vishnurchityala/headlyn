@@ -1,0 +1,18 @@
+HTTP/2 200 
+date: Thu, 28 May 2026 07:24:45 GMT
+content-type: application/xml
+cf-ray: a02b8582bd87caa8-DEL
+cf-cache-status: HIT
+x-xss-protection: 1; mode=block
+age: 32
+cache-control: public, max-age=300
+last-modified: Thu, 28 May 2026 07:18:29 GMT
+server: cloudflare
+strict-transport-security: max-age=31536000; includeSubdomains; preload
+vary: Accept-Encoding
+content-security-policy: block-all-mixed-content; style-src https: 'unsafe-inline'; script-src https: blob: 'unsafe-inline' 'unsafe-eval'; img-src https: data:; frame-src https:;
+x-cache-stored: Thu, 28 May 2026 07:24:13 GMT
+x-content-type-options: nosniff
+x-frame-options: SAMEORIGIN
+x-request-id: 1b976c04353e841e6c292696670bdf65
+

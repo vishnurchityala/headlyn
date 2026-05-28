@@ -1,0 +1,22 @@
+HTTP/2 200 
+content-type: text/xml
+etag: XXXXXXXX
+x-xss-protection: 1; mode=block
+x-frame-options: SAMEORIGIN
+x-content-type-options: nosniff
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+strict-transport-security: max-age=31536000; includeSubDomains
+content-security-policy: default-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://cdnjs.cloudflare.com https://fonts.gstatic.com/ static.pib.gov.in; script-src 'self' https://www.google-analytics.com 'unsafe-inline' 'unsafe-eval' static.pib.gov.in; script-src-elem 'unsafe-inline' *; style-src 'self'  'unsafe-inline' static.pib.gov.in https://pib.gov.in/; style-src-elem 'self' 'unsafe-inline' https://cdnjs.cloudflare.com static.pib.gov.in https://fonts.googleapis.com/ https://platform.twitter.com/ https://twitter.com/ https://www.facebook.com/  https://www.kooapp.com/ https://www.youtube.com/ https://d2aspyhfct5pw3.cloudfront.net/ https://pib.gov.in/; media-src 'self' https://www.youtube.com/ https://twitter.com/ https://www.facebook.com/ https://www.kooapp.com/ https://d2aspyhfct5pw3.cloudfront.net/ static.pib.gov.in; frame-src https://www.google.com https://www.instagram.com https://pib.gov.in/ https://www.pib.gov.in/ static.pib.gov.in https://pib.gov.in/ https://platform.twitter.com/ https://twitter.com/ https://syndication.twitter.com/  https://www.facebook.com/ https://web.facebook.com/ https://www.kooapp.com/ http://youtube.com/ https://www.youtube.com/ http://www.youtube.com/ https://d2aspyhfct5pw3.cloudfront.net/; connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com  https://analytics.google.com https://stats.g.doubleclick.net https://static.pib.gov.in/; form-action 'self'; img-src * data:
+referrer-policy: strict-origin-when-cross-origin
+expires: Thu, 28 May 2026 07:24:47 GMT
+cache-control: max-age=0, no-cache, no-store
+pragma: no-cache
+date: Thu, 28 May 2026 07:24:47 GMT
+content-length: 4170
+server-timing: cdn-cache; desc=HIT
+server-timing: edge; dur=19
+alt-svc: h3=":443"; ma=93600
+x-nic--cache-status: Miss from child
+x-nic-grn: 0.cc8c4017.1779953087.5ee692f
+server-timing: ak_p; desc="1779953087828_390106316_99510575_1939_11616_13_29_15";dur=1
+
