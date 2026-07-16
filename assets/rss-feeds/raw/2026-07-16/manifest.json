@@ -1,0 +1,59 @@
+{
+  "captured_at_utc": "2026-07-16T16:34:12Z",
+  "category": "india-news",
+  "user_agent": "headlyn-benchmark-curation/0.1",
+  "feeds": [
+    {
+      "id": "hindustan-times",
+      "name": "Hindustan Times",
+      "url": "https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml",
+      "feed_path": "hindustan-times/feed.xml",
+      "http_status": 200,
+      "bytes": 98733,
+      "item_count": 100
+    },
+    {
+      "id": "the-hindu",
+      "name": "The Hindu",
+      "url": "https://www.thehindu.com/news/national/feeder/default.rss",
+      "feed_path": "the-hindu/feed.xml",
+      "http_status": 200,
+      "bytes": 42670,
+      "item_count": 60
+    },
+    {
+      "id": "ndtv",
+      "name": "NDTV",
+      "url": "https://feeds.feedburner.com/ndtvnews-india-news",
+      "feed_path": "ndtv/feed.xml",
+      "http_status": 200,
+      "bytes": 27669,
+      "item_count": 20
+    },
+    {
+      "id": "news18",
+      "name": "News18",
+      "url": "https://www.news18.com/commonfeeds/v1/eng/rss/india.xml",
+      "feed_path": "news18/feed.xml",
+      "http_status": 200,
+      "bytes": 214599,
+      "item_count": 200
+    },
+    {
+      "id": "pib",
+      "name": "Press Information Bureau",
+      "url": "https://www.pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=1&reg=1",
+      "feed_path": "pib/feed.xml",
+      "http_status": 200,
+      "bytes": 5051,
+      "item_count": 20
+    }
+  ],
+  "failures": [
+    {
+      "id": "firstpost",
+      "url": "https://www.firstpost.com/commonfeeds/v1/mfp/rss/india.xml",
+      "reason": "Publisher edge returned Access Denied during this capture."
+    }
+  ]
+}
