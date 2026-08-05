@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from headlyn_clustering.models import Dataset
+from headlyn_clustering.embedding import generate_embeddings
+from headlyn_clustering.models import Dataset, EmbeddingConfig, EmbeddingSet
 from headlyn_clustering.pipeline import run_dataset_stage
 
 
@@ -16,7 +17,9 @@ def run_pipeline(
     *,
     dataset_path: Path = DEFAULT_DATASET_PATH,
     split: str | None = "test",
-) -> Dataset:
-    """Run the currently implemented dataset-loading stage."""
+) -> EmbeddingSet:
+    """Run dataset loading followed by embedding generation."""
 
-    return run_dataset_stage(dataset_path, split=split)
+    dataset = run_dataset_stage(dataset_path, split=split)
+    config = EmbeddingConfig(cache_dir=ROOT_DIR / "artifacts" / "cache" / "embeddings")
+    return generate_embeddings(dataset, config)

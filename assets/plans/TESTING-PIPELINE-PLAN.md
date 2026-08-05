@@ -26,8 +26,8 @@ artifacts. No LLM, network service, or model download is required.
     from runtime articles.
   - `text.py`: normalize paragraphs into deterministic `clean_text` and
     embedding input.
-  - `embedding.py`: deterministic weighted TF-IDF vectors using title,
-    description, and body.
+  - `embedding.py`: Sentence Transformer vectors plus deterministic BM25
+    lexical weights and spaCy entities using title, description, and body.
   - `hybrid_candidate.py`: union semantic, lexical, and title-similarity
     candidates with rank and provenance.
   - `scoring.py`: combine semantic, lexical, title, entity/anchor, and
@@ -108,9 +108,9 @@ only in evaluation reports and error-analysis artifacts.
   descriptive project name.
 - V1 ends at article clusters and evaluation; canonical story generation is
   deferred.
-- Deterministic TF-IDF is the default embedding backend. Sentence Transformer,
-  FAISS/Qdrant, Leiden, and Louvain adapters may be added behind the same stage
-  interfaces later.
+  - `BAAI/bge-small-en-v1.5` is the default semantic embedding backend.
+    BM25 lexical weights are generated in the embedding stage so hybrid
+    retrieval only consumes them and does not calculate weights.
 - The evaluation dataset remains unchanged; the loader separates labels in
   memory.
 - This iteration uses manual verification only; no automated test package is
