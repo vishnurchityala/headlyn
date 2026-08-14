@@ -1,19 +1,25 @@
-"""Run the Headlyn pipeline through embedding generation."""
+"""Run the Headlyn pipeline through hybrid candidate retrieval."""
 
 from __future__ import annotations
 
 from headlyn_clustering.embedding import EmbeddingError
+from headlyn_clustering.hybrid_candidate import CandidateRetrievalError
+from headlyn_clustering.scoring import PairScoringError
 from pipeline import run_pipeline
 
 
 def main() -> int:
     try:
-        embeddings = run_pipeline(split="test")
-    except EmbeddingError as exc:
-        print(f"embedding_generation: failed ({exc})")
+        scored = run_pipeline(split="test")
+    except (EmbeddingError, CandidateRetrievalError, PairScoringError) as exc:
+        print(f"pair_scoring: failed ({exc})")
         return 1
-    entity_count = sum(len(record.entities) for record in embeddings.records)
-    print(f"embedding_generation: passed ({len(embeddings.records)} embeddings, {entity_count} entities)")
+    accepted = sum(candidate.accepted for candidate in scored.candidates)
+    print(
+        "pair_scoring: passed "
+        f"({len(scored.article_ids)} articles, "
+        f"{len(scored.candidates)} scored pairs, {accepted} accepted)"
+    )
     return 0
 
 

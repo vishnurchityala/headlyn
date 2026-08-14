@@ -108,7 +108,8 @@ only in evaluation reports and error-analysis artifacts.
   descriptive project name.
 - V1 ends at article clusters and evaluation; canonical story generation is
   deferred.
-  - `BAAI/bge-small-en-v1.5` is the default semantic embedding backend.
+  - `Qwen/Qwen3-Embedding-0.6B` is the default semantic embedding backend with
+    1024-dimensional vectors.
     BM25 lexical weights are generated in the embedding stage so hybrid
     retrieval only consumes them and does not calculate weights.
 - The evaluation dataset remains unchanged; the loader separates labels in

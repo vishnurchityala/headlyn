@@ -322,7 +322,7 @@ headline + first 300-500 chars
 Candidate model options:
 
 * all-MiniLM-L6-v2
-* bge-small-en
+* Qwen3-Embedding-0.6B
 
 Graph construction:
 
