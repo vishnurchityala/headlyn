@@ -3,10 +3,11 @@
 ## Project pivot
 
 Headlyn has pivoted from a complex news canonicalization system to a daily
-newsletter. The active goal is to aggregate multiple RSS/feed sources and send
-one concise briefing to users by email. The initial sourcing scope is India for
-general news, while Technology & Science and Sports can include worldwide
-developments.
+newsletter. The active goal is to aggregate multiple RSS/feed sources,
+normalize related reports into story clusters, rewrite the selected stories
+with a local LLM, and send one concise briefing to users by email. The initial
+sourcing scope is India for general news, while Technology & Science and Sports
+can include worldwide developments.
 
 The earlier work explored article embeddings, chunking, hybrid retrieval,
 pairwise scoring, graph construction, and story clustering. That work is now
@@ -43,8 +44,9 @@ Suggested sections:
 6. Sports
 7. Other
 
-These are presentation sections, not story clusters. Two reports about the same
-event may remain two separate newsletter items.
+These are presentation sections, not story clusters. Story normalization may
+combine reports about the same event into one source-linked story, while
+unrelated reports remain separate newsletter stories.
 
 ## End-to-end product flow
 
@@ -55,6 +57,7 @@ RSS/feed sources
   → lightly clean descriptions and titles
   → remove exact duplicate URLs/titles
   → normalize same-event articles into source-linked stories
+  → rewrite and classify stories with Gemma
   → choose a balanced daily set
   → assign topic sections
   → render the shared edition
@@ -109,12 +112,25 @@ exists, aim for at least four publishers and cap a publisher at roughly three
 selected items. Topic balance should guide the edition, but weak or repetitive
 items should not be included merely to fill a section.
 
-### Rendering and delivery
+### Newsletter rewriting, rendering, and delivery
 
-The email should have a clear date/header, a short introduction, topic sections,
-source attribution, links, and a footer. Unsubscribe information is mandatory
-before sending to external subscribers. Transport/provider and subscription
-management remain open decisions.
+The newsletter stage consumes `newsletter_stories.json` and asks the local
+Gemma model for a grounded headline, 30–70 word summary, and one controlled
+topic section. The prompt receives every article title, description, and
+publisher in the story cluster. Failed rewrites fall back to the
+representative RSS title and description.
+
+The email has a clear date/header, short introduction, topic sections, source
+attribution, representative original links, and a footer. It is rendered as
+both HTML and plain text. Preview is the default; SMTP delivery is explicit and
+uses generic environment-based SMTP settings for an internal/test recipient
+list. Sending is idempotent by edition date and supports an explicit forced
+resend.
+
+Newsletter artifacts are written under
+`artifacts/stages/daily_newsletter/<edition_date>/` and include rewrites,
+selection diagnostics, JSON edition data, HTML/text bodies, delivery state, and
+a summary. Recipient addresses are not persisted in artifacts.
 
 ## Reliability and failure behavior
 
@@ -146,12 +162,11 @@ Do not treat the following as requirements for the current product:
 
 - dense embeddings and semantic similarity scoring;
 - article chunking and chunk-level aggregation;
-- semantic/lexical candidate retrieval;
-- pair scoring thresholds;
-- similarity graphs, Leiden, or Louvain;
+- semantic retrieval and graph clustering;
 - cross-day story timelines;
-- generated canonical headlines or AI summaries; and
-- personalized feeds or personalized newsletter editions.
+- personalized feeds or personalized newsletter editions;
+- production subscriber management, provider-specific mail APIs, and website
+  delivery.
 
 ## Repository context
 

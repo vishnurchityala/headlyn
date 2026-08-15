@@ -5,15 +5,16 @@
 # Headlyn
 
 Headlyn is a daily news briefing. It aggregates RSS feeds from multiple
-publishers, selects a small and balanced set of useful headlines, and delivers
-one shared morning newsletter by email.
+publishers, normalizes related reports into story clusters, rewrites the
+selected stories with a local LLM, and delivers one shared morning newsletter
+by email.
 
 ## Product direction
 
-The first product is an editorially light newsletter, not a story
-canonicalization platform. An RSS item is the unit shown to a reader. Each item
-keeps its original publisher, headline, description, publication time, and link
-so readers can open the source article.
+The first product is a shared, editorially grounded newsletter. RSS items are
+normalized into source-linked story clusters before selection. The newsletter
+uses a local LLM to create a concise headline and summary from the clustered
+RSS titles and descriptions while preserving a representative source link.
 
 The initial geographic scope is India for National, Politics, Business &
 Economy, and other current-affairs coverage. Technology & Science and Sports
@@ -31,10 +32,11 @@ RSS feeds
   → clean and validate feed metadata
   → remove exact duplicate URLs and titles
   → normalize same-event articles into story points
+  → rewrite and classify stories with Gemma
   → select a balanced set across publishers and topics
   → organize items into topic sections
   → render the morning email
-  → send the shared edition to subscribers
+  → preview or send the shared edition to subscribers
 ```
 
 The first implementation stage is a concurrent RSS ingestion pipeline. It
@@ -83,25 +85,67 @@ The local runtime must have the `gemma4:e4b-it-q4_K_M` Ollama model available an
 `FlagEmbedding` dependency installed for BGE-M3. Use `--entity-model` and
 `--llm-endpoint` to override the LLM defaults.
 
+The newsletter stage consumes `newsletter_stories.json`, asks the local Gemma
+model for a grounded headline, summary, and controlled topic section, then
+selects a balanced set of stories. Preview is the default and does not require
+SMTP credentials:
+
+```text
+python -m headlyn.newsletter.pipeline \
+  --story-run-id 20260815T091659Z \
+  --edition-date 2026-08-15
+```
+
+The complete one-shot pipeline can run ingestion, story normalization, and
+newsletter generation together:
+
+```text
+python -m headlyn.pipeline --edition-date 2026-08-15
+```
+
+Use `--send` only after configuring the generic SMTP environment variables:
+
+Copy `.env.example` to `.env`, replace the placeholders, and load it into the
+shell before running the send command. Never commit `.env` or real credentials.
+
+```text
+HEADLYN_SMTP_HOST=smtp.example.com
+HEADLYN_SMTP_PORT=587
+HEADLYN_SMTP_USERNAME=...
+HEADLYN_SMTP_PASSWORD=...
+HEADLYN_SMTP_FROM=newsletter@example.com
+HEADLYN_SMTP_REPLY_TO=newsletter@example.com
+HEADLYN_RECIPIENTS=one@example.com,two@example.com
+HEADLYN_UNSUBSCRIBE_INSTRUCTIONS="Reply to this email to unsubscribe."
+```
+
+The first mailing version is intended for an internal/test recipient list.
+Preview artifacts and delivery state are written under
+`artifacts/stages/daily_newsletter/<edition_date>/`. Sending is idempotent by
+edition date; use `--force-resend` only when an intentional repeat delivery is
+required.
+
 Selection should avoid allowing one publisher to dominate when alternatives
 are available. The edition should generally represent at least four publishers
 and cap a publisher at roughly three items where the day's inventory allows it.
 This is a diversity guardrail, not a semantic story-merging rule.
 
-## Newsletter item contract
+## Newsletter story contract
 
-Every selected item should contain:
+Every selected story contains:
 
-- headline
-- cleaned RSS description
-- publisher/source name
+- LLM-rewritten headline
+- grounded LLM summary
+- controlled topic section
+- representative publisher/source name
 - publication timestamp
-- original article URL
-- topic section
+- representative original article URL
+- source story ID and cluster counts
 
-Descriptions may be lightly cleaned for HTML, whitespace, and length. Headlyn
-does not generate canonical summaries in this phase; the newsletter presents
-the source-provided description with clear attribution.
+The LLM receives only the clustered RSS titles, descriptions, and publisher
+names. If rewriting fails for a story, the representative RSS title and
+description are used as a diagnosed fallback. All contributing source records
+remain available in the story-normalization debugging artifacts.
 
 ## Editorial and delivery rules
 
@@ -111,8 +155,11 @@ the source-provided description with clear attribution.
 - The target length is approximately 8–10 items, suitable for a five-minute
   read.
 - Exact duplicate URLs and repeated normalized titles are removed.
-- Articles from different publishers remain separate items, even when they
-  discuss the same event.
+- Related articles from different publishers are represented by one
+  source-linked story cluster when story normalization accepts the match.
+- The daily edition targets ten stories, requires at least five valid stories,
+  and caps a representative source at three stories where inventory allows.
+- Preview generation is the default; SMTP delivery requires `--send`.
 - If a source fails, healthy sources may still contribute to the edition.
 - If fewer than five valid items are available, the edition should fail safely
   rather than send an empty or misleading newsletter.
@@ -136,6 +183,9 @@ registry configuration and source-scoped artifact directory.
 - RSS ingestion code: [`headlyn/ingestion/`](./headlyn/ingestion/)
 - Story normalization code: [`headlyn/story_normalization/`](./headlyn/story_normalization/)
 - Story normalization plan: [`assets/plans/STORY-NORMALIZATION-LLM-ENTITY-BGE-M3-PLAN.md`](./assets/plans/STORY-NORMALIZATION-LLM-ENTITY-BGE-M3-PLAN.md)
+- Newsletter code: [`headlyn/newsletter/`](./headlyn/newsletter/)
+- Daily newsletter plan: [`assets/plans/DAILY-NEWSLETTER-MAILING-PLAN.md`](./assets/plans/DAILY-NEWSLETTER-MAILING-PLAN.md)
+- SMTP environment template: [`.env.example`](./.env.example)
 - Stage outputs and diagnostics: [`artifacts/stages/`](./artifacts/stages/)
 - Ingestion tests: [`tests/`](./tests/)
 
@@ -146,11 +196,10 @@ The following research direction is paused for the newsletter product:
 - dense embeddings and semantic similarity scoring
 - article chunking and chunk aggregation
 - hybrid semantic/lexical retrieval
-- pairwise scoring and similarity thresholds
-- similarity graphs and graph clustering
 - cross-day story timelines
-- LLM-generated headline rewriting and summaries; these are later pipeline stages
 - personalized ranking or personalized editions
+- production subscriber management and provider-specific delivery APIs
+- website delivery; the newsletter is the first user interaction
 
 The existing clustering artifacts are retained as historical research context.
 They are not part of the active newsletter flow and should not determine the
@@ -158,8 +207,9 @@ current product requirements.
 
 ## Success criteria for the first edition
 
-A successful daily edition should have 8–10 valid items when enough source
+A successful daily edition should have 8–10 valid stories when enough source
 content exists, include at least four publishers when possible, contain no
-exact duplicates, preserve a source link for every item, and render clear
+exact duplicates, preserve a representative source link for every story, use
+grounded rewritten content or a source-text fallback, and render clear
 non-empty topic sections. The same edition should be reproducible for every
 subscriber for that morning.
