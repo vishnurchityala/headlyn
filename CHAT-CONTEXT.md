@@ -54,6 +54,7 @@ RSS/feed sources
   → validate required metadata
   → lightly clean descriptions and titles
   → remove exact duplicate URLs/titles
+  → normalize same-event articles into source-linked stories
   → choose a balanced daily set
   → assign topic sections
   → render the shared edition
@@ -91,8 +92,10 @@ plus a run summary under `artifacts/stages/rss_ingestion/<run_id>/summary.json`.
 
 Cleanup is intentionally light: strip feed HTML, normalize whitespace, and
 truncate descriptions only as needed for email readability. Remove duplicate
-URLs and repeated normalized titles. Do not use semantic similarity to merge
-articles or construct a canonical event record.
+URLs and repeated normalized titles. Same-day articles may then be normalized
+into one source-linked story by the story-normalization stage, which uses the
+local Gemma 4 model for entity extraction and BGE-M3 sparse lexical matching. It does not
+fetch article pages or create new prose.
 
 Each concurrent source task writes only its own source directory, avoiding
 shared-file collisions. A failed source is recorded in its own summary while
@@ -141,13 +144,12 @@ morning edition with:
 
 Do not treat the following as requirements for the current product:
 
-- Qwen or other embedding models;
+- dense embeddings and semantic similarity scoring;
 - article chunking and chunk-level aggregation;
 - semantic/lexical candidate retrieval;
 - pair scoring thresholds;
 - similarity graphs, Leiden, or Louvain;
-- canonical story IDs or story timelines;
-- cross-source story merging;
+- cross-day story timelines;
 - generated canonical headlines or AI summaries; and
 - personalized feeds or personalized newsletter editions.
 

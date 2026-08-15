@@ -30,6 +30,7 @@ RSS feeds
   → collect fresh items
   → clean and validate feed metadata
   → remove exact duplicate URLs and titles
+  → normalize same-event articles into story points
   → select a balanced set across publishers and topics
   → organize items into topic sections
   → render the morning email
@@ -65,6 +66,22 @@ The ingestion pipeline uses only the Python standard library. Each source is
 processed concurrently and writes only to its own source-scoped artifact
 directory. A run-level `summary.json` records successful, failed, and partial
 source results.
+
+The story-normalization stage consumes an ingestion run and uses the local
+Gemma 4 model through Ollama for entity extraction and BAAI/BGE-M3 sparse lexical
+weights for pair scoring. It writes source-linked stories under
+`artifacts/stages/story_normalization/<run_id>/`.
+
+Run it after ingestion:
+
+```text
+python -m headlyn.story_normalization.pipeline \
+  --ingestion-run-id local-test
+```
+
+The local runtime must have the `gemma4:e4b-it-q4_K_M` Ollama model available and the
+`FlagEmbedding` dependency installed for BGE-M3. Use `--entity-model` and
+`--llm-endpoint` to override the LLM defaults.
 
 Selection should avoid allowing one publisher to dominate when alternatives
 are available. The edition should generally represent at least four publishers
@@ -117,6 +134,8 @@ registry configuration and source-scoped artifact directory.
 - RSS snapshots: [`assets/rss-feeds/raw/`](./assets/rss-feeds/raw/)
 - RSS snapshot notes: [`assets/rss-feeds/README.md`](./assets/rss-feeds/README.md)
 - RSS ingestion code: [`headlyn/ingestion/`](./headlyn/ingestion/)
+- Story normalization code: [`headlyn/story_normalization/`](./headlyn/story_normalization/)
+- Story normalization plan: [`assets/plans/STORY-NORMALIZATION-LLM-ENTITY-BGE-M3-PLAN.md`](./assets/plans/STORY-NORMALIZATION-LLM-ENTITY-BGE-M3-PLAN.md)
 - Stage outputs and diagnostics: [`artifacts/stages/`](./artifacts/stages/)
 - Ingestion tests: [`tests/`](./tests/)
 
@@ -124,14 +143,13 @@ registry configuration and source-scoped artifact directory.
 
 The following research direction is paused for the newsletter product:
 
-- embeddings, including the Qwen embedding experiments
+- dense embeddings and semantic similarity scoring
 - article chunking and chunk aggregation
 - hybrid semantic/lexical retrieval
 - pairwise scoring and similarity thresholds
 - similarity graphs and graph clustering
-- story canonicalization, story IDs, and evolving timelines
-- cross-source story merging
-- LLM rewriting and newsletter structuring; these are later pipeline stages
+- cross-day story timelines
+- LLM-generated headline rewriting and summaries; these are later pipeline stages
 - personalized ranking or personalized editions
 
 The existing clustering artifacts are retained as historical research context.

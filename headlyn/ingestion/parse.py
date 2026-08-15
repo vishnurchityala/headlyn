@@ -41,11 +41,12 @@ def parse_rss(payload: bytes) -> list[RssEntry]:
             continue
         raw_description = values.get("description") or values.get("encoded") or ""
         raw_date = values.get("pubDate") or values.get("published") or ""
+        description = clean_html(raw_description) or title
         entries.append(
             RssEntry(
                 url=url,
                 title=title,
-                description=clean_html(raw_description),
+                description=description,
                 published_at=normalize_datetime(raw_date),
                 tags=tuple(dedupe(categories)),
             )

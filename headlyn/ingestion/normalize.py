@@ -60,6 +60,7 @@ def normalize_entries(
             continue
         seen_urls.add(canonical_url)
         seen_titles.add(title_key)
+        description = entry.description.strip() or entry.title
         items.append(
             RssItem(
                 article_id=article_id(canonical_url),
@@ -68,7 +69,7 @@ def normalize_entries(
                 scope=feed.scope,
                 category=feed.category,
                 title=entry.title,
-                description=entry.description,
+                description=description,
                 published_at=entry.published_at,
                 url=canonical_url,
                 tags=entry.tags,

@@ -63,6 +63,17 @@ class IngestionContractTests(unittest.TestCase):
         self.assertEqual(entries[0].description, "Encoded description.")
         self.assertEqual(entries[0].url, "https://example.com/story")
 
+    def test_parse_rss_uses_title_when_description_is_missing(self) -> None:
+        payload = b"""<?xml version='1.0'?>
+        <rss><channel><item>
+          <guid>https://example.com/story</guid>
+          <title>Title-only story</title>
+          <pubDate>Thu, 16 Jul 2026 21:17:21 +0530</pubDate>
+        </item></channel></rss>"""
+        entries = parse_rss(payload)
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0].description, "Title-only story")
+
     def test_pipeline_writes_source_scoped_snapshot_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             result = run_pipeline(
