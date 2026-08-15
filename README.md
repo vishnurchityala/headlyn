@@ -88,7 +88,7 @@ The local runtime must have the `gemma4:e4b-it-q4_K_M` Ollama model available an
 The newsletter stage consumes `newsletter_stories.json`, asks the local Gemma
 model for a grounded headline, summary, and controlled topic section, then
 selects a balanced set of stories. Preview is the default and does not require
-SMTP credentials:
+Mailjet credentials:
 
 ```text
 python -m headlyn.newsletter.pipeline \
@@ -103,18 +103,17 @@ newsletter generation together:
 python -m headlyn.pipeline --edition-date 2026-08-15
 ```
 
-Use `--send` only after configuring the generic SMTP environment variables:
+Use `--send` only after configuring the Mailjet Send API environment variables:
 
 Copy `.env.example` to `.env`, replace the placeholders, and load it into the
 shell before running the send command. Never commit `.env` or real credentials.
 
 ```text
-HEADLYN_SMTP_HOST=smtp.example.com
-HEADLYN_SMTP_PORT=587
-HEADLYN_SMTP_USERNAME=...
-HEADLYN_SMTP_PASSWORD=...
-HEADLYN_SMTP_FROM=newsletter@example.com
-HEADLYN_SMTP_REPLY_TO=newsletter@example.com
+MJ_APIKEY_PUBLIC=...
+MJ_APIKEY_PRIVATE=...
+HEADLYN_MAILJET_FROM=your-confirmed-sender@example.com
+HEADLYN_MAILJET_FROM_NAME=Headlyn
+HEADLYN_MAILJET_REPLY_TO=your-confirmed-sender@example.com
 HEADLYN_RECIPIENTS=one@example.com,two@example.com
 HEADLYN_UNSUBSCRIBE_INSTRUCTIONS="Reply to this email to unsubscribe."
 ```
@@ -159,7 +158,7 @@ remain available in the story-normalization debugging artifacts.
   source-linked story cluster when story normalization accepts the match.
 - The daily edition targets ten stories, requires at least five valid stories,
   and caps a representative source at three stories where inventory allows.
-- Preview generation is the default; SMTP delivery requires `--send`.
+- Preview generation is the default; Mailjet delivery requires `--send`.
 - If a source fails, healthy sources may still contribute to the edition.
 - If fewer than five valid items are available, the edition should fail safely
   rather than send an empty or misleading newsletter.
@@ -185,7 +184,7 @@ registry configuration and source-scoped artifact directory.
 - Story normalization plan: [`assets/plans/STORY-NORMALIZATION-LLM-ENTITY-BGE-M3-PLAN.md`](./assets/plans/STORY-NORMALIZATION-LLM-ENTITY-BGE-M3-PLAN.md)
 - Newsletter code: [`headlyn/newsletter/`](./headlyn/newsletter/)
 - Daily newsletter plan: [`assets/plans/DAILY-NEWSLETTER-MAILING-PLAN.md`](./assets/plans/DAILY-NEWSLETTER-MAILING-PLAN.md)
-- SMTP environment template: [`.env.example`](./.env.example)
+- Mailjet environment template: [`.env.example`](./.env.example)
 - Stage outputs and diagnostics: [`artifacts/stages/`](./artifacts/stages/)
 - Ingestion tests: [`tests/`](./tests/)
 
@@ -198,7 +197,7 @@ The following research direction is paused for the newsletter product:
 - hybrid semantic/lexical retrieval
 - cross-day story timelines
 - personalized ranking or personalized editions
-- production subscriber management and provider-specific delivery APIs
+- production subscriber management and campaign automation
 - website delivery; the newsletter is the first user interaction
 
 The existing clustering artifacts are retained as historical research context.

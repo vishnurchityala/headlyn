@@ -19,6 +19,38 @@ def prepare_candidates(
         url = str(representative.get("url", "")).strip()
         if not url:
             continue
+        article_links = []
+        raw_articles = story.get("articles", [])
+        if isinstance(raw_articles, list):
+            for article in raw_articles:
+                if not isinstance(article, dict):
+                    continue
+                article_url = str(article.get("url", "")).strip()
+                if not article_url:
+                    continue
+                article_links.append(
+                    {
+                        "source_name": str(
+                            article.get("source_name") or article.get("source_id") or ""
+                        ),
+                        "title": str(article.get("title", "")),
+                        "published_at": str(article.get("published_at", "")),
+                        "url": article_url,
+                    }
+                )
+        if not article_links:
+            article_links.append(
+                {
+                    "source_name": str(
+                        representative.get("source_name")
+                        or representative.get("source_id")
+                        or ""
+                    ),
+                    "title": str(representative.get("title", "")),
+                    "published_at": str(representative.get("published_at", "")),
+                    "url": url,
+                }
+            )
         candidates.append(
             {
                 "story_id": story_id,
@@ -31,6 +63,7 @@ def prepare_candidates(
                 "source_name": str(representative.get("source_name", "")),
                 "published_at": str(representative.get("published_at", "")),
                 "url": url,
+                "articles": article_links,
                 "article_count": int(story.get("article_count", 1) or 1),
                 "source_count": int(story.get("source_count", 1) or 1),
                 "confidence": story.get("confidence"),
@@ -111,6 +144,37 @@ def select_stories(
     return selected, diagnostics
 
 
+def preselect_stories(
+    stories: list[dict[str, object]],
+    *,
+    target_items: int = 10,
+    max_items_per_source: int = 3,
+) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """Rank raw story clusters and limit expensive rewrites to likely selections."""
+    ranked = sorted(stories, key=story_selection_key, reverse=True)
+    selected: list[dict[str, object]] = []
+    source_counts: dict[str, int] = {}
+    for story in ranked:
+        if len(selected) >= target_items:
+            break
+        representative = representative_article(story)
+        source_id = str(representative.get("source_id", ""))
+        if not str(representative.get("url", "")).strip():
+            continue
+        if source_counts.get(source_id, 0) >= max_items_per_source:
+            continue
+        selected.append(story)
+        source_counts[source_id] = source_counts.get(source_id, 0) + 1
+    return selected, {
+        "input_story_count": len(stories),
+        "preselected_story_count": len(selected),
+        "target_items": target_items,
+        "max_items_per_source": max_items_per_source,
+        "source_counts": source_counts,
+        "preselected_story_ids": [str(story.get("story_id", "")) for story in selected],
+    }
+
+
 def representative_article(story: dict[str, object]) -> dict[str, object]:
     representative_id = str(story.get("representative_article_id", ""))
     articles = story.get("articles", [])
@@ -125,13 +189,23 @@ def representative_article(story: dict[str, object]) -> dict[str, object]:
     return {}
 
 
-def selection_key(candidate: dict[str, object]) -> tuple[datetime, int, int, float, str]:
+def selection_key(candidate: dict[str, object]) -> tuple[int, int, datetime, float, str]:
     return (
-        parse_datetime(str(candidate.get("published_at", ""))),
-        int(candidate.get("source_count", 1) or 1),
         int(candidate.get("article_count", 1) or 1),
+        int(candidate.get("source_count", 1) or 1),
+        parse_datetime(str(candidate.get("published_at", ""))),
         float(candidate.get("confidence") or 0.0),
         str(candidate.get("story_id", "")),
+    )
+
+
+def story_selection_key(story: dict[str, object]) -> tuple[int, int, datetime, float, str]:
+    return (
+        int(story.get("article_count", 1) or 1),
+        int(story.get("source_count", 1) or 1),
+        parse_datetime(str(story.get("latest_published_at", ""))),
+        float(story.get("confidence") or 0.0),
+        str(story.get("story_id", "")),
     )
 
 

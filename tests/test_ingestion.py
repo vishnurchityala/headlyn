@@ -1,21 +1,39 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from headlyn.ingestion.models import PipelineConfig
 from headlyn.ingestion.normalize import normalize_title, normalize_url
 from headlyn.ingestion.parse import parse_rss
 from headlyn.ingestion.registry import available_sources, get_feed
 from headlyn.ingestion.pipeline import run_pipeline
+from headlyn.tls import configure_ca_bundle
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 class IngestionContractTests(unittest.TestCase):
+    def test_configure_ca_bundle_uses_certifi_without_overriding_explicit_values(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            bundle = configure_ca_bundle()
+            self.assertIsNotNone(bundle)
+            self.assertEqual(os.environ["SSL_CERT_FILE"], bundle)
+            self.assertEqual(os.environ["REQUESTS_CA_BUNDLE"], bundle)
+
+        with patch.dict(
+            os.environ,
+            {"SSL_CERT_FILE": "/custom/ca.pem", "REQUESTS_CA_BUNDLE": "/custom/ca.pem"},
+            clear=True,
+        ):
+            self.assertEqual(configure_ca_bundle(), "/custom/ca.pem")
+            self.assertEqual(os.environ["SSL_CERT_FILE"], "/custom/ca.pem")
+
     def test_registered_sources(self) -> None:
         self.assertEqual(
             available_sources(),

@@ -5,9 +5,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from headlyn.newsletter.delivery import MailjetMailSender, MailjetSettings
 from headlyn.newsletter.models import NewsletterConfig, StoryRewrite
 from headlyn.newsletter.pipeline import run_newsletter
 from headlyn.newsletter.rewrite import NewsletterRewriteError, parse_rewrite_response
+from headlyn.newsletter.render import render_html
 from headlyn.newsletter.select import prepare_candidates, select_stories
 
 
@@ -42,7 +44,88 @@ class FakeSender:
         return 2
 
 
+class FakeMailjetResponse:
+    status_code = 200
+
+    def json(self) -> dict[str, object]:
+        return {"Messages": [{"Status": "success"}]}
+
+
+class FakeMailjetSend:
+    def __init__(self) -> None:
+        self.data: dict[str, object] | None = None
+
+    def create(self, *, data: dict[str, object]) -> FakeMailjetResponse:
+        self.data = data
+        return FakeMailjetResponse()
+
+
+class FakeMailjetClient:
+    def __init__(self) -> None:
+        self.send = FakeMailjetSend()
+
+
 class NewsletterTests(unittest.TestCase):
+    def test_story_card_uses_representative_article_link(self) -> None:
+        html_output = render_html(
+            {
+                "edition_date": "2026-08-15",
+                "stories": [
+                    {
+                        "section": "National",
+                        "headline": "One story",
+                        "summary": "A summary.",
+                        "source_name": "Firstpost",
+                        "source_id": "firstpost",
+                        "published_at": "2026-08-15T10:00:00+00:00",
+                        "url": "https://example.com/representative",
+                        "article_count": 2,
+                        "articles": [
+                            {
+                                "source_name": "Firstpost",
+                                "title": "First report",
+                                "url": "https://example.com/first",
+                            },
+                            {
+                                "source_name": "NDTV",
+                                "title": "Second report",
+                                "url": "https://example.com/second",
+                            },
+                        ],
+                    }
+                ],
+            }
+        )
+        self.assertIn("https://example.com/representative", html_output)
+        self.assertNotIn("Reports used", html_output)
+
+    def test_mailjet_sender_builds_v31_payload_with_inline_logo(self) -> None:
+        client = FakeMailjetClient()
+        sender = MailjetMailSender(
+            MailjetSettings(
+                api_key="public",
+                api_secret="private",
+                sender="sender@example.com",
+                sender_name="Headlyn",
+                reply_to="reply@example.com",
+                recipients=("one@example.com", "two@example.com"),
+            ),
+            client=client,
+        )
+        count = sender.send(
+            {"edition_date": "2026-08-15", "stories": []},
+            "<p>HTML</p>",
+            "Text",
+        )
+        self.assertEqual(count, 2)
+        assert client.send.data is not None
+        message = client.send.data["Messages"][0]
+        self.assertEqual(message["From"], {"Email": "sender@example.com", "Name": "Headlyn"})
+        self.assertEqual(message["To"], [{"Email": "one@example.com"}, {"Email": "two@example.com"}])
+        self.assertEqual(message["ReplyTo"], {"Email": "reply@example.com"})
+        self.assertIn("cid:headlyn-logo.png", message["HTMLPart"])
+        self.assertEqual(message["InlinedAttachments"][0]["ContentID"], "headlyn-logo.png")
+
     def test_parse_rewrite_response_enforces_sections(self) -> None:
         parsed = parse_rewrite_response(
             '{"headline":"Headline","summary":"A factual summary.","section":"National"}'
@@ -66,6 +149,24 @@ class NewsletterTests(unittest.TestCase):
         self.assertEqual(len(selected), 5)
         self.assertEqual(diagnostics["selected_source_count"], 4)
         self.assertLessEqual(diagnostics["source_counts"]["firstpost"], 2)
+
+    def test_selection_prioritizes_stories_with_more_articles(self) -> None:
+        older_multi_report = candidate(
+            "story-multi", "firstpost", "National", "2026-08-15T08:00:00+00:00"
+        )
+        older_multi_report["article_count"] = 3
+        newer_single_report = candidate(
+            "story-single", "ndtv", "Politics", "2026-08-15T12:00:00+00:00"
+        )
+        newer_single_report["article_count"] = 1
+
+        selected, _ = select_stories(
+            [older_multi_report, newer_single_report],
+            target_items=1,
+            max_items_per_source=3,
+        )
+
+        self.assertEqual([story["story_id"] for story in selected], ["story-multi"])
 
     def test_preview_writes_newsletter_artifacts_and_falls_back(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -92,12 +193,19 @@ class NewsletterTests(unittest.TestCase):
             self.assertTrue((output_dir / "newsletter.txt").exists())
             self.assertTrue((output_dir / "selection.json").exists())
             summary = json.loads((output_dir / "summary.json").read_text())
-            self.assertEqual(summary["rewrite_fallback_count"], 6)
+            self.assertEqual(summary["rewrite_fallback_count"], 5)
+            self.assertEqual(summary["preselected_story_count"], 5)
             self.assertEqual(json.loads((output_dir / "delivery.json").read_text())["status"], "preview")
             html_output = (output_dir / "newsletter.html").read_text()
             self.assertIn("Read original", html_output)
             self.assertIn("Headlyn", html_output)
             self.assertIn("The Newsletter", html_output)
+            self.assertIn("Vishnu Chityala", html_output)
+            self.assertIn("vishnurchityala@gmail.com", html_output)
+            self.assertIn("+91-9537234000", html_output)
+            self.assertIn("Sources in this edition", html_output)
+            self.assertIn("firstpost", html_output)
+            self.assertIn("India headline", html_output)
             self.assertIn('alt="Headlyn"', html_output)
 
     def test_held_edition_does_not_send(self) -> None:

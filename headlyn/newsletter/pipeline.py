@@ -7,9 +7,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from headlyn.ingestion.artifacts import write_json, write_jsonl
 
-from .delivery import MailSender, SmtpMailSender
+from .delivery import MailjetMailSender, MailSender
 from .models import NewsletterConfig, NewsletterResult
 from .render import render_html, render_text
 from .rewrite import (
@@ -18,7 +20,7 @@ from .rewrite import (
     fallback_rewrite,
     story_fingerprint,
 )
-from .select import prepare_candidates, select_stories
+from .select import prepare_candidates, preselect_stories, select_stories
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -32,6 +34,8 @@ def run_newsletter(
     rewriter: StoryRewriter | None = None,
     sender: MailSender | None = None,
 ) -> NewsletterResult:
+    # Support direct newsletter-stage execution as well as the full pipeline.
+    load_dotenv(ROOT_DIR / ".env", override=False)
     validate_config(config)
     artifact_root = config.artifact_root or DEFAULT_ARTIFACT_ROOT
     story_dir = artifact_root / "story_normalization" / config.story_run_id
@@ -58,13 +62,22 @@ def run_newsletter(
         text_body = (output_dir / "newsletter.txt").read_text(encoding="utf-8")
     else:
         stories = load_stories(story_path)
+        rewrite_stories_input, preselection_diagnostics = preselect_stories(
+            stories,
+            target_items=config.target_items,
+            max_items_per_source=config.max_items_per_source,
+        )
+        write_json(
+            output_dir / "preselection.json",
+            preselection_diagnostics,
+        )
         rewrite_engine = rewriter or OllamaStoryRewriter(
             model_name=config.llm_model,
             endpoint=config.llm_endpoint,
             timeout_seconds=config.llm_timeout_seconds,
         )
         rewrites = rewrite_stories(
-            stories,
+            rewrite_stories_input,
             rewrite_engine,
             output_dir / "rewrites.jsonl",
         )
@@ -78,6 +91,7 @@ def run_newsletter(
             output_dir / "selection.json",
             {
                 "selected_story_ids": [story["story_id"] for story in selected],
+                "preselected_story_ids": preselection_diagnostics["preselected_story_ids"],
                 "diagnostics": selection_diagnostics,
             },
         )
@@ -105,7 +119,7 @@ def run_newsletter(
     selected_count = len(edition.get("stories", []))
     ready = selected_count >= config.minimum_items
     if config.send and ready:
-        mail_sender = sender or SmtpMailSender()
+        mail_sender = sender or MailjetMailSender()
         recipient_count = mail_sender.send(edition, html_body, text_body)
         delivery = {
             "status": "sent",
@@ -142,9 +156,13 @@ def run_newsletter(
         "minimum_items": config.minimum_items,
         "target_items": config.target_items,
         "rewrite_fallback_count": fallback_count,
+        "preselected_story_count": len(
+            read_json(output_dir / "preselection.json").get("preselected_story_ids", [])
+        ) if (output_dir / "preselection.json").exists() else 0,
         "delivery_status": delivery["status"],
         "output_files": [
             "rewrites.jsonl",
+            "preselection.json",
             "selection.json",
             "newsletter.json",
             "newsletter.html",

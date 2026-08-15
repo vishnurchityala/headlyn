@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from dotenv import load_dotenv
+
 from .ingestion.models import PipelineConfig
 from .ingestion.pipeline import run_pipeline as run_ingestion_pipeline
 from .newsletter.delivery import MailSender
@@ -18,6 +20,7 @@ from .story_normalization.lexical import LexicalScorer
 from .story_normalization.llm import EntityExtractor
 from .story_normalization.models import StoryNormalizationConfig
 from .story_normalization.pipeline import run_story_normalization
+from .tls import configure_ca_bundle
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -65,6 +68,10 @@ def run_pipeline(
     rewriter: StoryRewriter | None = None,
     sender: MailSender | None = None,
 ) -> DailyPipelineResult:
+    # Load local credentials/configuration when the pipeline is run directly.
+    # Existing shell variables take precedence over values in .env.
+    load_dotenv(ROOT_DIR / ".env", override=False)
+    configure_ca_bundle()
     artifact_root = config.artifact_root or DEFAULT_ARTIFACT_ROOT
     if config.story_run_id:
         story_run_id = config.story_run_id

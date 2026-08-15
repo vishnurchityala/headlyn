@@ -122,8 +122,8 @@ representative RSS title and description.
 
 The email has a clear date/header, short introduction, topic sections, source
 attribution, representative original links, and a footer. It is rendered as
-both HTML and plain text. Preview is the default; SMTP delivery is explicit and
-uses generic environment-based SMTP settings for an internal/test recipient
+both HTML and plain text. Preview is the default; Mailjet delivery is explicit and
+uses environment-based Mailjet settings for an internal/test recipient
 list. Sending is idempotent by edition date and supports an explicit forced
 resend.
 
@@ -165,7 +165,7 @@ Do not treat the following as requirements for the current product:
 - semantic retrieval and graph clustering;
 - cross-day story timelines;
 - personalized feeds or personalized newsletter editions;
-- production subscriber management, provider-specific mail APIs, and website
+- production subscriber management, campaign automation, and website
   delivery.
 
 ## Repository context

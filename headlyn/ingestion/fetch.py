@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .models import FeedConfig, PipelineConfig
+from ..tls import configure_ca_bundle
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -28,6 +29,7 @@ def fetch_feed(config: PipelineConfig, feed: FeedConfig) -> FeedResponse:
         path = SNAPSHOT_ROOT / config.snapshot_date / feed.source_id / "feed.xml"
         return FeedResponse(payload=path.read_bytes(), http_status=None, headers={}, input_path=path)
 
+    configure_ca_bundle()
     request = urllib.request.Request(
         feed.feed_url,
         headers={

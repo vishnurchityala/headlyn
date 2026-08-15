@@ -1,58 +1,61 @@
 from __future__ import annotations
 
+import base64
 import os
-import smtplib
 from dataclasses import dataclass
-from email.message import EmailMessage
-from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
+
+try:
+    from mailjet_rest import Client
+except ImportError:  # pragma: no cover - exercised only in an incomplete environment
+    Client = None  # type: ignore[assignment]
 
 from .render import DEFAULT_LOGO_PATH, render_html
+from ..tls import configure_ca_bundle
+
+
+LOGO_FILENAME = "headlyn-logo.png"
 
 
 @dataclass(frozen=True)
-class SmtpSettings:
-    host: str
-    port: int
-    username: str
-    password: str
+class MailjetSettings:
+    api_key: str
+    api_secret: str
     sender: str
+    sender_name: str
     reply_to: str
     recipients: tuple[str, ...]
-    starttls: bool = True
 
     @classmethod
-    def from_environment(cls) -> "SmtpSettings":
+    def from_environment(cls) -> "MailjetSettings":
         recipients = tuple(
             address.strip()
             for address in os.environ.get("HEADLYN_RECIPIENTS", "").split(",")
             if address.strip()
         )
         return cls(
-            host=os.environ.get("HEADLYN_SMTP_HOST", "").strip(),
-            port=int(os.environ.get("HEADLYN_SMTP_PORT", "587")),
-            username=os.environ.get("HEADLYN_SMTP_USERNAME", "").strip(),
-            password=os.environ.get("HEADLYN_SMTP_PASSWORD", ""),
-            sender=os.environ.get("HEADLYN_SMTP_FROM", "").strip(),
-            reply_to=os.environ.get("HEADLYN_SMTP_REPLY_TO", "").strip(),
+            api_key=os.environ.get("MJ_APIKEY_PUBLIC", "").strip(),
+            api_secret=os.environ.get("MJ_APIKEY_PRIVATE", "").strip(),
+            sender=os.environ.get("HEADLYN_MAILJET_FROM", "").strip(),
+            sender_name=os.environ.get("HEADLYN_MAILJET_FROM_NAME", "Headlyn").strip(),
+            reply_to=os.environ.get("HEADLYN_MAILJET_REPLY_TO", "").strip(),
             recipients=recipients,
-            starttls=os.environ.get("HEADLYN_SMTP_STARTTLS", "true").lower()
-            not in {"0", "false", "no"},
         )
 
     def validate(self) -> None:
         missing = [
             name
             for name, value in (
-                ("HEADLYN_SMTP_HOST", self.host),
-                ("HEADLYN_SMTP_FROM", self.sender),
+                ("MJ_APIKEY_PUBLIC", self.api_key),
+                ("MJ_APIKEY_PRIVATE", self.api_secret),
+                ("HEADLYN_MAILJET_FROM", self.sender),
             )
             if not value
         ]
         if not self.recipients:
             missing.append("HEADLYN_RECIPIENTS")
         if missing:
-            raise ValueError("missing SMTP configuration: " + ", ".join(missing))
+            raise ValueError("missing Mailjet configuration: " + ", ".join(missing))
 
 
 class MailSender(Protocol):
@@ -60,40 +63,70 @@ class MailSender(Protocol):
         ...
 
 
-class SmtpMailSender:
-    def __init__(self, settings: SmtpSettings | None = None) -> None:
-        self.settings = settings or SmtpSettings.from_environment()
+class MailjetMailSender:
+    """Deliver a rendered newsletter through Mailjet Send API v3.1."""
+
+    def __init__(
+        self,
+        settings: MailjetSettings | None = None,
+        *,
+        client: Any | None = None,
+    ) -> None:
+        self.settings = settings or MailjetSettings.from_environment()
+        self._client = client
 
     def send(self, edition: dict[str, object], html_body: str, text_body: str) -> int:
+        configure_ca_bundle()
         self.settings.validate()
-        message = EmailMessage()
-        message["Subject"] = f"Headlyn Daily Briefing — {edition['edition_date']}"
-        message["From"] = self.settings.sender
-        message["To"] = ", ".join(self.settings.recipients)
-        if self.settings.reply_to:
-            message["Reply-To"] = self.settings.reply_to
-        message.set_content(text_body)
         email_html = html_body
-        logo_bytes: bytes | None = None
+        inline_attachments: list[dict[str, str]] = []
         try:
             logo_bytes = DEFAULT_LOGO_PATH.read_bytes()
-            email_html = render_html(edition, logo_src="cid:headlyn-logo")
         except OSError:
-            pass
-        message.add_alternative(email_html, subtype="html")
+            logo_bytes = None
         if logo_bytes is not None:
-            html_part = message.get_payload()[-1]
-            html_part.add_related(
-                logo_bytes,
-                maintype="image",
-                subtype="png",
-                cid="<headlyn-logo>",
-                filename=Path(DEFAULT_LOGO_PATH).name,
+            email_html = render_html(edition, logo_src=f"cid:{LOGO_FILENAME}")
+            inline_attachments.append(
+                {
+                    "ContentType": "image/png",
+                    "Filename": LOGO_FILENAME,
+                    "ContentID": LOGO_FILENAME,
+                    "Base64Content": base64.b64encode(logo_bytes).decode("ascii"),
+                }
             )
-        with smtplib.SMTP(self.settings.host, self.settings.port, timeout=30) as server:
-            if self.settings.starttls:
-                server.starttls()
-            if self.settings.username:
-                server.login(self.settings.username, self.settings.password)
-            server.send_message(message)
+
+        message: dict[str, object] = {
+            "From": {"Email": self.settings.sender, "Name": self.settings.sender_name},
+            "To": [{"Email": recipient} for recipient in self.settings.recipients],
+            "Subject": f"Headlyn Daily Briefing — {edition['edition_date']}",
+            "TextPart": text_body,
+            "HTMLPart": email_html,
+            "CustomID": f"headlyn-{edition['edition_date']}",
+        }
+        if self.settings.reply_to:
+            message["ReplyTo"] = {"Email": self.settings.reply_to}
+        if inline_attachments:
+            message["InlinedAttachments"] = inline_attachments
+
+        data = {"Messages": [message]}
+        response = self._send_request(data)
+        if response.status_code != 200:
+            try:
+                details = response.json()
+            except (TypeError, ValueError):
+                details = getattr(response, "text", "unknown Mailjet error")
+            raise RuntimeError(f"Mailjet send failed ({response.status_code}): {details}")
         return len(self.settings.recipients)
+
+    def _send_request(self, data: dict[str, object]) -> Any:
+        if self._client is not None:
+            return self._client.send.create(data=data)
+        if Client is None:
+            raise RuntimeError(
+                "mailjet-rest is not installed; install dependencies from requirements.txt"
+            )
+        with Client(
+            auth=(self.settings.api_key, self.settings.api_secret),
+            version="v3.1",
+        ) as mailjet:
+            return mailjet.send.create(data=data)
