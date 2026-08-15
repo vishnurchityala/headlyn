@@ -60,11 +60,21 @@ RSS/feed sources
   → deliver by email
 ```
 
+The first implementation stage is a concurrent RSS ingestion pipeline. It is
+live by default and can replay checked-in RSS snapshots. It produces normalized
+RSS item records and run diagnostics under `artifacts/stages/`. It never fetches
+article pages.
+
 ### Source aggregation
 
-The initial source pool includes Firstpost, The Hindu, Hindustan Times, News18,
-PIB, and NDTV. RSS is the primary input. The source pool may expand, but a
-source should retain attribution and a direct link in the final edition.
+The active source pool contains Firstpost, The Indian Express, NDTV, and
+Hindustan Times India News. RSS is the primary input. Every source retains its
+publisher identity and direct article link for the final edition.
+
+The source registry stores each source's website, RSS URL, scope, and category.
+These four feeds are currently configured as `india-general`; worldwide
+Technology & Science or Sports feeds can be added later without changing the
+normalized item contract.
 
 ### Freshness and validation
 
@@ -73,12 +83,20 @@ description, source, publication timestamp, and original URL. The daily run
 should select items from the intended morning edition window and retain enough
 metadata to diagnose feed failures or stale content.
 
+The ingestion pipeline writes a feed snapshot, normalized RSS JSONL, and
+source summary under `artifacts/stages/rss_ingestion/<run_id>/<source_id>/`,
+plus a run summary under `artifacts/stages/rss_ingestion/<run_id>/summary.json`.
+
 ### Cleanup and duplicate handling
 
 Cleanup is intentionally light: strip feed HTML, normalize whitespace, and
 truncate descriptions only as needed for email readability. Remove duplicate
 URLs and repeated normalized titles. Do not use semantic similarity to merge
 articles or construct a canonical event record.
+
+Each concurrent source task writes only its own source directory, avoiding
+shared-file collisions. A failed source is recorded in its own summary while
+healthy sources continue; the overall run is marked `partial` when appropriate.
 
 ### Selection and balance
 
@@ -138,7 +156,8 @@ Do not treat the following as requirements for the current product:
 - [`README.md`](./README.md) contains the current product contract.
 - [`NOTES.md`](./NOTES.md) records product decisions and open questions.
 - [`assets/rss-feeds/raw/`](./assets/rss-feeds/raw/) contains RSS snapshots.
-- [`assets/datasets/`](./assets/datasets/) contains historical article data.
-- [`scripts/`](./scripts/) contains source/feed experiments.
-- Existing clustering code and artifacts are historical and not active runtime
+- [`headlyn/ingestion/`](./headlyn/ingestion/) contains the registry and pipeline.
+- [`tests/`](./tests/) contains deterministic ingestion contract tests.
+- [`artifacts/stages/`](./artifacts/stages/) contains ignored stage outputs.
+- Existing clustering artifacts are historical and not active runtime
   requirements.

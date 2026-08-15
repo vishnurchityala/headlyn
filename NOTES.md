@@ -23,6 +23,32 @@ Multiple RSS sources
   → one morning email edition
 ```
 
+## First implementation stage: RSS ingestion
+
+The first active stage is a config-driven, source-scoped RSS worker. It currently
+supports only the Firstpost India feed, live execution, and RSS snapshot replay.
+Each feed item is normalized and exact duplicate URLs and titles are removed.
+Article pages are not fetched.
+
+The normalized record contains the source, scope, category, title, description,
+publication timestamp, canonical URL, tags, stable article ID, and ingestion
+timestamp. Later pipeline stages may use an LLM to rewrite and structure these
+RSS items into the newsletter.
+
+Run outputs are written to ignored directories:
+
+```text
+artifacts/stages/rss_ingestion/<run_id>/<source_id>/
+```
+
+Workers can be invoked independently:
+
+```text
+python -m headlyn.ingestion.worker --source firstpost --mode live
+```
+
+Existing clustering artifacts remain untouched. No cache directory is used.
+
 The newsletter should feel useful without pretending to provide original
 reporting. The source headline and description remain visible, and every item
 links to the publisher's article.
@@ -75,7 +101,8 @@ from the newsletter flow.
 
 Subscription management, transport/provider selection, and launch operations
 are still open product decisions. Unsubscribe support is required before real
-external sending.
+external sending. The RSS worker does not perform topic classification,
+newsletter selection, LLM rewriting, or delivery.
 
 ## Open questions
 
@@ -87,7 +114,6 @@ external sending.
 
 ## Historical research
 
-RSS snapshots, article datasets, clustering experiments, and debugging
-artifacts remain useful for reference and benchmarking, but they are not
-acceptance criteria for the newsletter. The active product contract is
-documented in [`README.md`](./README.md).
+RSS snapshots, clustering experiments, and debugging artifacts remain useful
+for reference and benchmarking, but they are not acceptance criteria for the
+newsletter. The active product contract is documented in [`README.md`](./README.md).

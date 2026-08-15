@@ -36,6 +36,36 @@ RSS feeds
   → send the shared edition to subscribers
 ```
 
+The first implementation stage is a concurrent RSS ingestion pipeline. It
+supports live feeds and replay of checked-in RSS snapshots, then writes
+normalized RSS items and diagnostics under `artifacts/stages/`. Article pages
+are not fetched in this stage. All registered sources run by default; a source
+can be selected by repeating `--source`.
+
+Run the stage with:
+
+```text
+python -m headlyn.ingestion.pipeline \
+  --source firstpost \
+  --source ndtv \
+  --source hindustan-times \
+  --mode snapshot \
+  --snapshot-date 2026-05-28 \
+  --run-id local-test
+python -m headlyn.ingestion.pipeline --mode live
+
+# Run only selected sources:
+python -m headlyn.ingestion.pipeline \
+  --source firstpost \
+  --source ndtv \
+  --mode live
+```
+
+The ingestion pipeline uses only the Python standard library. Each source is
+processed concurrently and writes only to its own source-scoped artifact
+directory. A run-level `summary.json` records successful, failed, and partial
+source results.
+
 Selection should avoid allowing one publisher to dominate when alternatives
 are available. The edition should generally represent at least four publishers
 and cap a publisher at roughly three items where the day's inventory allows it.
@@ -73,14 +103,22 @@ the source-provided description with clear attribution.
 
 ## Current source and data assets
 
-The current RSS source pool includes Firstpost, The Hindu, Hindustan Times,
-News18, PIB, and NDTV. The source list can grow without changing the reader
-contract.
+The current RSS source pool contains Firstpost plus three India-wide feeds:
+The Indian Express, NDTV, and Hindustan Times. Every source has a separate
+registry configuration and source-scoped artifact directory.
+
+| Source ID | Website | RSS feed |
+| --- | --- | --- |
+| `firstpost` | [Firstpost](https://www.firstpost.com/) | `https://www.firstpost.com/commonfeeds/v1/mfp/rss/india.xml` |
+| `indian-express` | [The Indian Express](https://indianexpress.com/) | `https://indianexpress.com/section/india/feed/` |
+| `ndtv` | [NDTV](https://www.ndtv.com/) | `https://feeds.feedburner.com/ndtvnews-india-news` |
+| `hindustan-times` | [Hindustan Times](https://www.hindustantimes.com/) | `https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml` |
 
 - RSS snapshots: [`assets/rss-feeds/raw/`](./assets/rss-feeds/raw/)
 - RSS snapshot notes: [`assets/rss-feeds/README.md`](./assets/rss-feeds/README.md)
-- Source and article datasets: [`assets/datasets/`](./assets/datasets/)
-- Scraper and feed experiments: [`scripts/`](./scripts/)
+- RSS ingestion code: [`headlyn/ingestion/`](./headlyn/ingestion/)
+- Stage outputs and diagnostics: [`artifacts/stages/`](./artifacts/stages/)
+- Ingestion tests: [`tests/`](./tests/)
 
 ## Explicitly out of scope for v1
 
@@ -93,12 +131,12 @@ The following research direction is paused for the newsletter product:
 - similarity graphs and graph clustering
 - story canonicalization, story IDs, and evolving timelines
 - cross-source story merging
-- AI-generated summaries
+- LLM rewriting and newsletter structuring; these are later pipeline stages
 - personalized ranking or personalized editions
 
-The existing clustering code, evaluation catalogue, and generated artifacts are
-kept as historical research context. They are not part of the active newsletter
-flow and should not determine the current product requirements.
+The existing clustering artifacts are retained as historical research context.
+They are not part of the active newsletter flow and should not determine the
+current product requirements.
 
 ## Success criteria for the first edition
 
