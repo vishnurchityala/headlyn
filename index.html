@@ -118,7 +118,7 @@
       gap: 6px;
       color: #111827;
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 700;
       letter-spacing: -.01em;
       opacity: 1;
       transition: opacity .2s;
@@ -455,7 +455,7 @@
 
       <div class="phones" aria-label="Headlyn newsletter preview">
         <div class="phone-crop">
-          <img src="assets/images/HEADLYN-IPHONE-MOCKUP.png" alt="Headlyn newsletter shown on two iPhones">
+          <img src="assets/images/PHONE-MOCK-IMAGE.png" alt="Headlyn newsletter shown on two iPhones">
         </div>
       </div>
     </section>
@@ -474,8 +474,36 @@
         emailInput.focus();
         return;
       }
-      enrollNote.textContent = 'Check your inbox for a verification code.';
-      enrollNote.style.color = '#173fe6';
+
+      const submitButton = enrollForm.querySelector('button[type="submit"]');
+      submitButton.disabled = true;
+      enrollNote.textContent = 'Submitting your registration…';
+      enrollNote.style.color = 'rgba(17, 24, 39, .5)';
+
+      fetch('https://headlyn-backend-eta.vercel.app/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailInput.value })
+      })
+        .then(async (response) => {
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(payload.error || 'Unable to register right now.');
+          }
+          return payload;
+        })
+        .then((payload) => {
+          enrollNote.textContent = payload.message || 'Registration received. Access is pending approval.';
+          enrollNote.style.color = '#173fe6';
+          emailInput.value = '';
+        })
+        .catch((error) => {
+          enrollNote.textContent = error.message;
+          enrollNote.style.color = '#a12b3d';
+        })
+        .finally(() => {
+          submitButton.disabled = false;
+        });
     });
   </script>
 </body>
