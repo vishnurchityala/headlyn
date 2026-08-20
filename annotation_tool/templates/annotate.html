@@ -1,0 +1,132 @@
+{% extends "layout.html" %}
+
+{% block body %}
+<div class="app-shell">
+  <header class="app-header">
+    <a class="brand-lockup" href="{{ url_for('annotate') }}">
+      <img class="brand-logo" src="{{ url_for('asset', filename='HEADLYN-BLUE-LOGO.png') }}" alt="Headlyn logo">
+      <span><span class="kicker">Headlyn / Phase 0</span><strong class="brand-title">Story annotation desk</strong></span>
+    </a>
+    {% if run %}
+    <div class="header-actions">
+      <span class="run-pill">{{ run.manifest_id }}</span>
+      <a class="quiet-button" href="{{ url_for('annotate', reference_id=reference.article_id if reference else '', status=status) }}">Refresh</a>
+    </div>
+    {% endif %}
+  </header>
+
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="notice {{ 'error-notice' if category == 'error' else 'success-notice' }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    {% if not run %}
+      <section class="empty-run panel">
+        <span class="kicker">Phase 0 / Setup required</span>
+        <h1>Import an ingestion run to begin.</h1>
+        <p>Use the importer command from the annotation tool README, then reload this page.</p>
+      </section>
+    {% else %}
+      <section class="overview-strip">
+        <div>
+          <span class="kicker">Evaluation set</span>
+          <h1>Pair the stories. Build the baseline.</h1>
+          <p>Review article relationships before changing clustering.</p>
+        </div>
+        <div class="progress-block">
+          <div class="progress-copy"><span>{{ progress.labeled_references }} of {{ progress.total_references }} references reviewed</span><strong>{{ ((progress.labeled_references / progress.total_references * 100)|round|int) if progress.total_references else 0 }}%</strong></div>
+          <div class="progress-track"><span style="width: {{ ((progress.labeled_references / progress.total_references * 100)|round|int) if progress.total_references else 0 }}%"></span></div>
+        </div>
+          <div class="metric-row">
+          <div class="metric"><strong>{{ article_count }}</strong><span>Articles</span></div>
+          <div class="metric"><strong>{{ progress.labels.values()|sum }}</strong><span>Pairs labeled</span></div>
+          <div class="metric"><strong>{{ progress.labels.same_story }}</strong><span>Same story</span></div>
+        </div>
+      </section>
+
+      <section class="workbench">
+        <aside class="reference-sidebar panel">
+          <div class="panel-heading"><div><span class="kicker">01 / Reference</span><h2>Choose an article</h2></div><span class="count-badge">{{ references|length }}</span></div>
+          <form class="reference-filters" method="get" action="{{ url_for('annotate') }}">
+            <input type="hidden" name="reference_id" value="{{ reference.article_id if reference else '' }}">
+            <input type="hidden" name="status" value="{{ status }}">
+            <input name="reference_search" value="{{ reference_search }}" placeholder="Search references">
+            <select name="status" onchange="this.form.submit()">
+              <option value="unlabeled" {{ 'selected' if status == 'unlabeled' }}>Unlabeled first</option>
+              <option value="all" {{ 'selected' if status == 'all' }}>All references</option>
+              <option value="labeled" {{ 'selected' if status == 'labeled' }}>Reviewed only</option>
+            </select>
+            <button class="quiet-button full-button" type="submit">Find references</button>
+          </form>
+          <div class="reference-list">
+            {% for item in references %}
+              <a class="reference-row {{ 'active' if reference and item.article_id == reference.article_id }}" href="{{ url_for('annotate', reference_id=item.article_id, status=status, reference_search=reference_search) }}">
+                <span class="reference-row-title">{{ item.title }}</span>
+                <span class="reference-row-meta">{{ item.source_name }} · {{ item.annotation_count }} labels</span>
+              </a>
+            {% else %}
+              <div class="empty-state">No references match this view.</div>
+            {% endfor %}
+          </div>
+        </aside>
+
+        <form id="annotation-form" class="annotation-form" method="post" action="{{ url_for('save_form_annotations') }}">
+          <input type="hidden" name="reference_article_id" value="{{ reference.article_id if reference else '' }}">
+          <section class="candidate-panel panel">
+            <div class="panel-heading">
+              <div><span class="kicker">02 / Candidates</span><h2>Find matching coverage</h2></div>
+              <div class="nav-buttons">
+                {% if previous_id %}<a href="{{ url_for('annotate', reference_id=previous_id, status=status, reference_search=reference_search) }}">←</a>{% else %}<span>←</span>{% endif %}
+                {% if next_id %}<a href="{{ url_for('annotate', reference_id=next_id, status=status, reference_search=reference_search) }}">→</a>{% else %}<span>→</span>{% endif %}
+              </div>
+            </div>
+            {% if reference %}
+              <article class="article-card reference-card">
+                <div class="card-topline"><span class="eyebrow">Reference · {{ reference.source_name }}</span><span class="reference-badge">Anchor article</span></div>
+                <h3>{{ reference.title }}</h3>
+                <p class="article-description">{{ reference.description or 'No description available.' }}</p>
+                <div class="card-footer"><span>{{ reference.published_at|pretty_date }}</span><span>{{ reference.category or 'General' }}</span></div>
+                {% if reference.tags %}<div class="tag-row">{% for tag in reference.tags[:4] %}<span class="tag">{{ tag }}</span>{% endfor %}</div>{% endif %}
+                {% if reference.url %}<a class="source-link" href="{{ reference.url }}" target="_blank" rel="noreferrer">Open original ↗</a>{% endif %}
+              </article>
+            {% endif %}
+
+            <div class="filter-bar">
+              <input name="search" value="{{ filters.search }}" placeholder="Search title or description">
+              <select name="source"><option value="">All sources</option>{% for item in sources %}<option value="{{ item.source_id }}" {{ 'selected' if filters.source == item.source_id }}>{{ item.source_name }}</option>{% endfor %}</select>
+              <select name="category"><option value="">All categories</option>{% for item in categories %}<option value="{{ item }}" {{ 'selected' if filters.category == item }}>{{ item }}</option>{% endfor %}</select>
+              <select name="scope"><option value="">All scopes</option>{% for item in scopes %}<option value="{{ item }}" {{ 'selected' if filters.scope == item }}>{{ item }}</option>{% endfor %}</select>
+              <button class="primary-button" type="submit" formaction="{{ url_for('annotate') }}" formmethod="get">Apply</button>
+            </div>
+
+            <div class="candidate-grid">
+              {% for item in candidates %}
+                <article class="article-card candidate-card" data-article-id="{{ item.article_id }}" data-title="{{ item.title|e }}" data-source="{{ item.source_name|e }}" data-existing-label="{{ item.existing_label or '' }}" data-existing-notes="{{ item.existing_notes or '' }}">
+                  <div class="card-topline"><span class="eyebrow">{{ item.source_name }}</span>{% if item.existing_label %}<span class="label-chip {{ item.existing_label }}">{{ item.existing_label|replace('_', ' ') }}</span>{% endif %}</div>
+                  <h3>{{ item.title }}</h3>
+                  <p class="article-description">{{ item.description or 'No description available.' }}</p>
+                  <div class="card-footer"><span>{{ item.published_at|pretty_date }}</span><span>{{ item.category or 'General' }}</span><button class="select-button candidate-toggle" type="button" data-article-id="{{ item.article_id }}" aria-pressed="false">Select</button></div>
+                  {% if item.tags %}<div class="tag-row">{% for tag in item.tags[:4] %}<span class="tag">{{ tag }}</span>{% endfor %}</div>{% endif %}
+                  {% if item.url %}<a class="source-link" href="{{ item.url }}" target="_blank" rel="noreferrer">Open original ↗</a>{% endif %}
+                </article>
+              {% else %}
+                <div class="empty-state">No candidate articles match these filters.</div>
+              {% endfor %}
+            </div>
+          </section>
+
+          <aside class="selection-sidebar panel">
+            <div class="panel-heading"><div><span class="kicker">03 / Selected pairs</span><h2>Label your picks</h2></div><span id="selected-count" class="count-badge accent">0</span></div>
+            <p class="panel-hint">Select candidates, then give every pair a relationship label before saving.</p>
+            <div id="selection-list" class="selection-list"><div class="empty-state compact">Your selected pairs will appear here.</div></div>
+            <p id="validation-hint" class="validation-hint" hidden></p>
+            <button id="save-button" class="save-button" type="submit" disabled>Save selected pairs</button>
+          </aside>
+        </form>
+      </section>
+    {% endif %}
+  </main>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f5f4f0">
+    <title>{% block title %}Headlyn · Phase 0 Annotation{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    {% block body %}{% endblock %}
+    <script defer src="{{ url_for('static', filename='annotation.js') }}"></script>
+  </body>
+</html>
