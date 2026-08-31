@@ -1,0 +1,19 @@
+{
+  "dataset_id": "full-dataset-direct-review-20260821",
+  "schema_version": "1",
+  "exported_at": "2026-08-31T17:33:18.331669+00:00",
+  "article_count": 170,
+  "pair_count": 14365,
+  "label_counts": {
+    "same_story": 146,
+    "related": 72,
+    "opposite": 0,
+    "unrelated": 14147,
+    "unclear": 0
+  },
+  "files": {
+    "articles": "articles.json",
+    "annotations_json": "pair_annotations.json",
+    "annotations_csv": "pair_annotations.csv"
+  }
+}

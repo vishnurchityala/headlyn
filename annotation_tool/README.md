@@ -41,16 +41,28 @@ Start the Flask application:
 Open <http://127.0.0.1:5050/annotate>. The card-based interface is rendered
 from Flask templates and enhanced with small vanilla JavaScript interactions.
 
-## Export labels
+## Export the evaluation dataset
 
 ```bash
 .venv-annotation/bin/python -m annotation_tool.api.exporter \
-  --db data/phase0-20260815T200549Z.sqlite3 \
-  --out artifacts/evaluations/phase0/20260815T200549Z
+  --db artifacts/evaluations/phase0/full-dataset-pairs.sqlite3 \
+  --out assets/datasets/phase0
 ```
 
-The export writes `pair_annotations.jsonl`, `pair_annotations.csv`, and
-`summary.json`.
+The export writes a self-contained dataset directory:
+
+```text
+assets/datasets/phase0/
+├── manifest.json
+├── articles.json
+├── pair_annotations.csv
+└── pair_annotations.json
+```
+
+Each annotation record contains only `article_id_a`, `article_id_b`,
+`reference_article_id`, and `label`. Article metadata is stored separately in
+`articles.json` and joined through the article IDs. The full dataset run
+contains 170 articles and 14,365 pair annotations.
 
 ## Tests
 

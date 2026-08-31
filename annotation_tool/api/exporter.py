@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from annotation_tool.api.db import LABELS, connect, get_run, initialize_database, utc_now
+from annotation_tool.api.db import LABELS, article_payload, connect, get_run, initialize_database, utc_now
 
 
 def export_annotations(db_path: str | Path, output_dir: str | Path) -> dict[str, Any]:
@@ -20,39 +20,50 @@ def export_annotations(db_path: str | Path, output_dir: str | Path) -> dict[str,
         run_id = int(run["id"])
         rows = connection.execute(
             """
-            SELECT p.run_id, p.article_id_a, p.article_id_b,
-                   p.reference_article_id, p.label, p.notes, p.annotator_id,
-                   p.created_at, p.updated_at
+            SELECT p.article_id_a, p.article_id_b,
+                   p.reference_article_id, p.label
             FROM pair_annotations p
             WHERE p.run_id = ?
-            ORDER BY p.article_id_a, p.article_id_b, p.annotator_id
+            ORDER BY p.article_id_a, p.article_id_b
             """,
             (run_id,),
         ).fetchall()
-        records = [dict(row) | {"manifest_id": run["manifest_id"]} for row in rows]
+        records = [dict(row) for row in rows]
 
-        jsonl_path = destination / "pair_annotations.jsonl"
-        jsonl_path.write_text(
-            "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
+        article_rows = connection.execute(
+            """
+            SELECT article_id, source_id, source_name, scope, category,
+                   title, description, published_at, url, tags_json, ingested_at
+            FROM articles
+            WHERE run_id = ?
+            ORDER BY article_id
+            """,
+            (run_id,),
+        ).fetchall()
+        articles = [article_payload(row) for row in article_rows]
+
+        json_path = destination / "pair_annotations.json"
+        json_path.write_text(
+            json.dumps(records, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
         csv_path = destination / "pair_annotations.csv"
         fieldnames = [
-            "manifest_id",
-            "run_id",
             "article_id_a",
             "article_id_b",
             "reference_article_id",
             "label",
-            "notes",
-            "annotator_id",
-            "created_at",
-            "updated_at",
         ]
         with csv_path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
             writer.writeheader()
             writer.writerows(records)
+
+        articles_path = destination / "articles.json"
+        articles_path.write_text(
+            json.dumps(articles, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
         article_count = connection.execute(
             "SELECT COUNT(*) AS count FROM articles WHERE run_id = ?", (run_id,)
@@ -63,21 +74,23 @@ def export_annotations(db_path: str | Path, output_dir: str | Path) -> dict[str,
             (run_id,),
         ):
             label_counts[row["label"]] = row["count"]
-        summary = {
-            "manifest_id": run["manifest_id"],
-            "manifest_path": run["manifest_path"],
-            "tool_version": run["tool_version"],
+        manifest = {
+            "dataset_id": run["manifest_id"],
             "schema_version": run["schema_version"],
             "exported_at": utc_now(),
             "article_count": article_count,
             "pair_count": len(records),
             "label_counts": label_counts,
-            "files": [jsonl_path.name, csv_path.name],
+            "files": {
+                "articles": articles_path.name,
+                "annotations_json": json_path.name,
+                "annotations_csv": csv_path.name,
+            },
         }
-        (destination / "summary.json").write_text(
-            json.dumps(summary, indent=2), encoding="utf-8"
+        (destination / "manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
-        return summary
+        return manifest
 
 
 def main() -> None:

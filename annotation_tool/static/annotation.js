@@ -93,3 +93,53 @@
     if (saveButton.disabled) event.preventDefault();
   });
 })();
+
+(function () {
+  const reviewList = document.getElementById("review-list");
+  const labelFilter = document.getElementById("review-label-filter");
+  const sortSelect = document.getElementById("review-sort");
+  const searchInput = document.getElementById("review-search");
+  const reviewCount = document.getElementById("review-count");
+  const emptyState = document.getElementById("review-empty");
+  if (!reviewList || !labelFilter || !sortSelect || !searchInput) return;
+
+  const rows = Array.from(reviewList.querySelectorAll(".review-row"));
+  const labelOrder = ["same_story", "related", "opposite", "unrelated", "unclear"];
+
+  function renderReview() {
+    const selectedLabel = labelFilter.value;
+    const search = searchInput.value.trim().toLowerCase();
+    const visibleRows = rows.filter((row) => {
+      const matchesLabel = selectedLabel === "all" || row.dataset.label === selectedLabel;
+      const matchesSearch = !search || (row.dataset.search || "").includes(search);
+      return matchesLabel && matchesSearch;
+    });
+    const sortValue = sortSelect.value;
+    visibleRows.sort((left, right) => {
+      if (sortValue !== "updated") {
+        if (left.dataset.label !== right.dataset.label) {
+          const leftPriority = left.dataset.label === sortValue ? 0 : 1;
+          const rightPriority = right.dataset.label === sortValue ? 0 : 1;
+          if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+          return labelOrder.indexOf(left.dataset.label) - labelOrder.indexOf(right.dataset.label);
+        }
+      }
+      return (right.dataset.updated || "").localeCompare(left.dataset.updated || "");
+    });
+
+    visibleRows.forEach((row) => reviewList.appendChild(row));
+    rows.forEach((row) => { row.hidden = !visibleRows.includes(row); });
+    if (emptyState) emptyState.hidden = visibleRows.length !== 0;
+    if (reviewCount) reviewCount.textContent = visibleRows.length;
+  }
+
+  [labelFilter, sortSelect].forEach((control) => control.addEventListener("change", renderReview));
+  searchInput.addEventListener("input", renderReview);
+  document.querySelectorAll("[data-review-label]").forEach((button) => {
+    button.addEventListener("click", () => {
+      labelFilter.value = button.dataset.reviewLabel;
+      renderReview();
+    });
+  });
+  renderReview();
+})();

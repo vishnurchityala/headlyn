@@ -126,6 +126,65 @@
           </aside>
         </form>
       </section>
+
+      <section class="review-panel panel">
+        <div class="panel-heading review-heading">
+          <div><span class="kicker">04 / Review</span><h2>All labeled pairs</h2></div>
+          <span id="review-count" class="count-badge">{{ review_annotations|length }}</span>
+        </div>
+        <div class="review-toolbar">
+          <label class="review-control">Show
+            <select id="review-label-filter" aria-label="Filter reviewed pairs by label">
+              <option value="all">All labels</option>
+              {% for label in labels %}
+                <option value="{{ label }}">{{ label|replace('_', ' ')|title }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="review-control">Sort
+            <select id="review-sort" aria-label="Sort reviewed pairs">
+              <option value="updated">Recently updated</option>
+              <option value="same_story">Same story first</option>
+              <option value="related">Related first</option>
+              <option value="opposite">Opposite first</option>
+              <option value="unrelated">Unrelated first</option>
+              <option value="unclear">Unclear first</option>
+            </select>
+          </label>
+          <input id="review-search" class="review-search" type="search" placeholder="Search reviewed pairs" aria-label="Search reviewed pairs">
+        </div>
+        <div class="review-summary" aria-label="Review label totals">
+          {% for label in labels %}
+            <button class="review-summary-chip {{ label }}" type="button" data-review-label="{{ label }}">
+              <span>{{ label|replace('_', ' ')|title }}</span><strong>{{ progress.labels[label] }}</strong>
+            </button>
+          {% endfor %}
+        </div>
+        <div id="review-list" class="review-list">
+          {% for item in review_annotations %}
+            <article class="review-row" data-label="{{ item.label }}" data-updated="{{ item.updated_at }}" data-search="{{ (item.reference_title ~ ' ' ~ item.candidate_title ~ ' ' ~ item.reference_source ~ ' ' ~ item.candidate_source)|lower|e }}">
+              <div class="review-row-main">
+                <div class="review-pair-article">
+                  <span class="review-role">Reference · {{ item.reference_source }}</span>
+                  <strong>{{ item.reference_title }}</strong>
+                </div>
+                <span class="review-arrow">→</span>
+                <div class="review-pair-article">
+                  <span class="review-role">Candidate · {{ item.candidate_source }}</span>
+                  <strong>{{ item.candidate_title }}</strong>
+                </div>
+              </div>
+              <div class="review-row-meta">
+                <span class="label-chip {{ item.label }}">{{ item.label|replace('_', ' ') }}</span>
+                {% if item.annotator_id != 'local' %}<span class="review-annotator">{{ item.annotator_id }}</span>{% endif %}
+                {% if item.notes %}<span class="review-note">“{{ item.notes }}”</span>{% endif %}
+                <time datetime="{{ item.updated_at }}">{{ item.updated_at|pretty_date }}</time>
+              </div>
+            </article>
+          {% endfor %}
+          <div id="review-empty" class="empty-state compact" hidden>No reviewed pairs match this view.</div>
+        </div>
+      </section>
     {% endif %}
   </main>
 </div>

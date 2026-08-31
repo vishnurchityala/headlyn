@@ -113,6 +113,7 @@ def create_app(db_path: str | Path = "data/phase0.sqlite3") -> Flask:
                 "remaining_references": max(total - labeled_references, 0),
                 "labels": label_counts(connection, run_id),
             }
+            review_annotations = query_review_annotations(connection, run_id)
             return render_template(
                 "annotate.html",
                 run=run,
@@ -130,6 +131,7 @@ def create_app(db_path: str | Path = "data/phase0.sqlite3") -> Flask:
                 sources=[dict(row) for row in sources],
                 categories=[row["category"] for row in categories],
                 scopes=[row["scope"] for row in scopes],
+                review_annotations=review_annotations,
             )
 
     @app.post("/annotate/save")
@@ -469,6 +471,46 @@ def query_candidates(
         """,
         [reference_id, reference_id, reference_id, reference_id, *params],
     ).fetchall()
+
+
+def query_review_annotations(
+    connection: sqlite3.Connection,
+    run_id: int,
+) -> list[dict[str, Any]]:
+    """Return labeled pairs in a review-friendly reference/candidate shape."""
+    rows = connection.execute(
+        """
+        SELECT p.*,
+               reference.title AS reference_title,
+               reference.source_name AS reference_source,
+               reference.published_at AS reference_published_at,
+               candidate.title AS candidate_title,
+               candidate.source_name AS candidate_source,
+               candidate.published_at AS candidate_published_at
+        FROM pair_annotations p
+        JOIN articles reference
+          ON reference.run_id = p.run_id
+         AND reference.article_id = p.reference_article_id
+        JOIN articles candidate
+          ON candidate.run_id = p.run_id
+         AND candidate.article_id = CASE
+               WHEN p.article_id_a = p.reference_article_id THEN p.article_id_b
+               ELSE p.article_id_a
+             END
+        WHERE p.run_id = ?
+        ORDER BY CASE p.label
+                   WHEN 'same_story' THEN 0
+                   WHEN 'related' THEN 1
+                   WHEN 'opposite' THEN 2
+                   WHEN 'unrelated' THEN 3
+                   ELSE 4
+                 END,
+                 p.updated_at DESC,
+                 p.id DESC
+        """,
+        (run_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def candidate_payload(row: sqlite3.Row) -> dict[str, Any]:
