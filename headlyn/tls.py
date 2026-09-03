@@ -5,14 +5,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import certifi
+
 
 def configure_ca_bundle() -> str | None:
     """Use certifi's CA bundle without overriding explicit user configuration."""
-    try:
-        import certifi
-    except ImportError:
-        return None
-
     bundle = Path(certifi.where())
     if not bundle.is_file():
         return None

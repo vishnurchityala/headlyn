@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from FlagEmbedding import BGEM3FlagModel
+
 
 class LexicalScorer(Protocol):
     model_name: str
@@ -29,13 +31,6 @@ class BgeM3LexicalScorer:
         self.batch_size = batch_size
         self.max_length = max_length
         self.use_fp16 = use_fp16
-        try:
-            from FlagEmbedding import BGEM3FlagModel
-        except ImportError as exc:
-            raise RuntimeError(
-                "BGE-M3 requires FlagEmbedding. Install requirements.txt before running "
-                "story normalization."
-            ) from exc
         self.model = BGEM3FlagModel(model_name, use_fp16=use_fp16)
 
     def score_pairs(self, pairs: list[tuple[str, str]]) -> list[float]:

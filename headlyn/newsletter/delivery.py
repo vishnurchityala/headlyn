@@ -5,10 +5,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-try:
-    from mailjet_rest import Client
-except ImportError:  # pragma: no cover - exercised only in an incomplete environment
-    Client = None  # type: ignore[assignment]
+from mailjet_rest import Client
 
 from .render import DEFAULT_LOGO_PATH, render_html
 from ..tls import configure_ca_bundle
@@ -121,10 +118,6 @@ class MailjetMailSender:
     def _send_request(self, data: dict[str, object]) -> Any:
         if self._client is not None:
             return self._client.send.create(data=data)
-        if Client is None:
-            raise RuntimeError(
-                "mailjet-rest is not installed; install dependencies from requirements.txt"
-            )
         with Client(
             auth=(self.settings.api_key, self.settings.api_secret),
             version="v3.1",

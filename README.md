@@ -124,6 +124,44 @@ Preview artifacts and delivery state are written under
 edition date; use `--force-resend` only when an intentional repeat delivery is
 required.
 
+## Story clustering dataset evaluation
+
+The phase 0 labelled dataset contains 170 articles and 14,365 pairwise
+annotations. The labels currently include 146 `same_story`, 14,147
+`unrelated`, and 72 `related` pairs. Story clustering output can be evaluated
+with the checked-in script below:
+
+```text
+python scripts/evaluate_story_clusters.py \
+  --stories artifacts/stages/story_clustering/phase0-real-dataset-test/newsletter_stories.json \
+  --annotations assets/datasets/phase0/pair_annotations.json \
+  --output artifacts/evaluations/phase0-story-clustering.json
+```
+
+The evaluator reports predicted story counts, singleton and story-size
+statistics, pair coverage, strict pairwise precision/recall/F1/accuracy, and
+per-label results. `related` pairs are reported but excluded from strict
+same-story metrics because they indicate topical relationship rather than
+identity of the news event.
+
+The initial clustering output produced 73 stories from 170 documents, with 46
+singleton stories. Its strict pairwise baseline was:
+
+```text
+Precision: 0.3454
+Recall:    0.8493
+F1:        0.4911
+Accuracy:  0.9820
+```
+
+The high accuracy is influenced by the large number of `unrelated` pairs. The
+low precision indicates that the initial threshold allowed too many unrelated
+articles to be merged and should be improved in subsequent clustering runs.
+
+The SQLite annotation export can be converted to JSONL with
+`scripts/convert_annotation_sqlite_to_jsonl.py`, but evaluation uses the
+complete labelled files under `assets/datasets/phase0/` directly.
+
 Selection should avoid allowing one publisher to dominate when alternatives
 are available. The edition should generally represent at least four publishers
 and cap a publisher at roughly three items where the day's inventory allows it.

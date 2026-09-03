@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 from headlyn.ingestion.artifacts import write_json, write_jsonl
 
 from .delivery import MailjetMailSender, MailSender
-from .models import NewsletterConfig, NewsletterResult
+from .models import NewsletterConfig, NewsletterResult, StoryRewrite
 from .render import render_html, render_text
 from .rewrite import (
     OllamaStoryRewriter,
@@ -228,8 +228,6 @@ def load_rewrite_cache(path: Path, model_name: str) -> dict[str, object]:
             value = json.loads(line)
             if value.get("model") != model_name:
                 continue
-            from .models import StoryRewrite
-
             rewrite = StoryRewrite(
                 story_id=str(value["story_id"]),
                 headline=str(value["headline"]),

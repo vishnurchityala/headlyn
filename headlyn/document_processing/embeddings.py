@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 from typing import Protocol, Sequence
 
+from FlagEmbedding import BGEM3FlagModel
+
 from .canonical import build_canonical_text, document_fingerprint
 from .models import EncodedDocument, StoryDocument
 
@@ -34,12 +36,6 @@ class BgeM3DocumentEncoder:
         self.batch_size = batch_size
         self.max_length = max_length
         self.use_fp16 = use_fp16
-        try:
-            from FlagEmbedding import BGEM3FlagModel
-        except ImportError as exc:
-            raise RuntimeError(
-                "BGE-M3 requires FlagEmbedding; install requirements.txt"
-            ) from exc
         self.model = BGEM3FlagModel(model_name, use_fp16=use_fp16)
 
     def encode(self, documents: Sequence[StoryDocument]) -> list[EncodedDocument]:
