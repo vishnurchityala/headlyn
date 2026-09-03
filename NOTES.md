@@ -53,6 +53,43 @@ The newsletter should feel useful without pretending to provide original
 reporting. The source headline and description remain visible, and every item
 links to the publisher's article.
 
+## Story clustering architecture
+
+The planned story-clustering pipeline prepares documents, retrieves matching
+active stories, and persists the resulting story state:
+
+```text
+RSS/article/video inputs
+          │
+          ▼
+  Document adapter and validation
+          │
+          ├── canonical text builder
+          ├── BGE-M3 dense embedding
+          ├── BGE-M3 lexical representation
+          └── Gemma entity extraction
+          │
+          ▼
+  Story clustering service
+          │
+          ├── lifecycle sweep
+          ├── Qdrant dense retrieval
+          ├── SQLite FTS5 BM25 retrieval
+          ├── candidate union
+          ├── composite reranking
+          └── attach or create singleton
+          │
+          ▼
+  Persistent story state
+          │
+          ├── Qdrant story vector/payload
+          ├── SQLite story metadata/members
+          └── assignment and diagnostic artifacts
+          │
+          ▼
+  newsletter_stories.json
+```
+
 ## Editorial decisions already made
 
 - Promise: a daily briefing with India-first general news and worldwide
