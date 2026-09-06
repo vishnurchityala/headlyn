@@ -136,6 +136,7 @@ class DocumentPreparationConfig:
     llm_retries: int = 2
     embedding_batch_size: int = 16
     embedding_max_length: int = 512
+    embedding_vector_size: int = 1024
     use_fp16: bool = False
     output_dir: Path | None = None
 

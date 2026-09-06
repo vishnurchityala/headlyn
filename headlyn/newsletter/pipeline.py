@@ -35,11 +35,15 @@ def run_newsletter(
     sender: MailSender | None = None,
 ) -> NewsletterResult:
     # Support direct newsletter-stage execution as well as the full pipeline.
-    load_dotenv(ROOT_DIR / ".env", override=False)
+    load_dotenv(override=False)
     validate_config(config)
     artifact_root = config.artifact_root or DEFAULT_ARTIFACT_ROOT
-    story_dir = artifact_root / "story_normalization" / config.story_run_id
+    story_dir = artifact_root / "story_clustering" / config.story_run_id
     story_path = story_dir / "newsletter_stories.json"
+    if not story_path.exists():
+        # Preserve compatibility with historical normalization artifacts.
+        story_dir = artifact_root / "story_normalization" / config.story_run_id
+        story_path = story_dir / "newsletter_stories.json"
     if not story_path.exists():
         raise FileNotFoundError(f"story artifact not found: {story_path}")
 

@@ -12,6 +12,7 @@ from headlyn.document_processing.embeddings import BgeM3DocumentEncoder
 from headlyn.document_processing.entities import OllamaEntityExtractor
 from headlyn.document_processing.models import DocumentPreparationConfig
 from headlyn.document_processing.pipeline import run_document_preparation
+from headlyn.document_processing.vector_store import QdrantDocumentVectorStore
 from headlyn.story_clustering.models import StoryClusteringConfig
 from headlyn.story_clustering.pipeline import run_story_clustering
 from headlyn.story_clustering.preparation import prepared_document_from_dict
@@ -38,11 +39,12 @@ class StoryClusteringDatasetIntegrationTests(unittest.TestCase):
             config=DocumentPreparationConfig(
                 ingestion_run_id="phase0-real-dataset-test",
                 artifact_root=root,
-            ),
-            documents=[RssArticleAdapter().adapt(as_rss_payload(article)) for article in articles],
-            encoder=BgeM3DocumentEncoder(),
-            entity_extractor=OllamaEntityExtractor(),
-        )
+                ),
+                documents=[RssArticleAdapter().adapt(as_rss_payload(article)) for article in articles],
+                encoder=BgeM3DocumentEncoder(),
+                document_vector_store=QdrantDocumentVectorStore(StoryIndexConfig.from_env()),
+                entity_extractor=OllamaEntityExtractor(),
+            )
         self.assertEqual(preparation.successful_count, len(articles))
 
         prepared = [

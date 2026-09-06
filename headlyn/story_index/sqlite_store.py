@@ -48,7 +48,9 @@ class SQLiteStoryStore:
                     category TEXT,
                     entity_names_json TEXT NOT NULL,
                     merged_story_ids_json TEXT NOT NULL,
-                    centroid_json TEXT NOT NULL DEFAULT '[]'
+                    centroid_json TEXT NOT NULL DEFAULT '[]',
+                    dense_sum_json TEXT NOT NULL DEFAULT '[]',
+                    sparse_weights_json TEXT NOT NULL DEFAULT '{}'
                 );
                 CREATE TABLE IF NOT EXISTS story_members (
                     story_id TEXT NOT NULL REFERENCES stories(story_id) ON DELETE CASCADE,
@@ -92,6 +94,8 @@ class SQLiteStoryStore:
                 """
             )
             self._ensure_column("stories", "centroid_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("stories", "dense_sum_json", "TEXT NOT NULL DEFAULT '[]'")
+            self._ensure_column("stories", "sparse_weights_json", "TEXT NOT NULL DEFAULT '{}'")
             self._ensure_column("documents", "document_json", "TEXT")
             self.connection.commit()
         except (OSError, sqlite3.Error) as exc:
@@ -132,6 +136,8 @@ class SQLiteStoryStore:
             merged_story_ids=json.loads(row["merged_story_ids_json"]),
             category=row["category"],
             centroid=tuple(json.loads(row["centroid_json"] or "[]")),
+            dense_sum=tuple(json.loads(row["dense_sum_json"] or "[]")),
+            sparse_weights=json.loads(row["sparse_weights_json"] or "{}"),
             member_documents=[
                 json.loads(member["document_json"])
                 for member in connection.execute(
@@ -159,8 +165,8 @@ class SQLiteStoryStore:
                         story_id, status, representative_document_id, canonical_text,
                         first_seen, latest_published_at, last_updated_at,
                         document_count, source_count, category, entity_names_json,
-                        merged_story_ids_json, centroid_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        merged_story_ids_json, centroid_json, dense_sum_json, sparse_weights_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(story_id) DO UPDATE SET
                         status=excluded.status,
                         representative_document_id=excluded.representative_document_id,
@@ -173,7 +179,9 @@ class SQLiteStoryStore:
                         category=excluded.category,
                         entity_names_json=excluded.entity_names_json,
                         merged_story_ids_json=excluded.merged_story_ids_json,
-                        centroid_json=excluded.centroid_json
+                        centroid_json=excluded.centroid_json,
+                        dense_sum_json=excluded.dense_sum_json,
+                        sparse_weights_json=excluded.sparse_weights_json
                     """,
                     story_values(story),
                 )
@@ -324,6 +332,8 @@ def story_values(story: StoryMetadata) -> tuple[object, ...]:
         json.dumps(story.entity_names),
         json.dumps(story.merged_story_ids),
         json.dumps(list(story.centroid)),
+        json.dumps(list(story.dense_sum)),
+        json.dumps(story.sparse_weights),
     )
 
 

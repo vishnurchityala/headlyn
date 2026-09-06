@@ -56,6 +56,8 @@ class StoryMetadata:
     merged_story_ids: list[str] = field(default_factory=list)
     category: str | None = None
     centroid: tuple[float, ...] = ()
+    dense_sum: tuple[float, ...] = ()
+    sparse_weights: dict[str, float] = field(default_factory=dict)
     member_documents: list[dict[str, object]] = field(default_factory=list)
 
     def representation(self, dense_vector: tuple[float, ...]) -> StoryRepresentation:

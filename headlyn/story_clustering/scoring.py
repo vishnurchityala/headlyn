@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
+from typing import Mapping
 
 from headlyn.document_processing.models import EntityExtraction
 from headlyn.story_index.models import HybridCandidate, StoryMetadata
@@ -36,6 +37,24 @@ def entity_score(extraction: EntityExtraction, story: StoryMetadata) -> float:
     )
 
 
+def bge_lexical_score(
+    query_weights: Mapping[str, float],
+    story_weights: Mapping[str, float],
+) -> float:
+    """Calculate bounded weighted overlap between BGE-M3 lexical weights."""
+    if not query_weights or not story_weights:
+        return 0.0
+    query_total = sum(max(0.0, float(value)) for value in query_weights.values())
+    story_total = sum(max(0.0, float(value)) for value in story_weights.values())
+    if query_total == 0.0 or story_total == 0.0:
+        return 0.0
+    overlap = sum(
+        min(max(0.0, float(query_weights.get(key, 0.0))), max(0.0, float(value)))
+        for key, value in story_weights.items()
+    )
+    return max(0.0, min(1.0, (2.0 * overlap) / (query_total + story_total)))
+
+
 def temporal_score(now: datetime, story: StoryMetadata) -> float:
     """Apply exponential decay to the age of the story's latest activity."""
     age_hours = max(0.0, (now - story.last_updated_at).total_seconds() / 3600)
@@ -46,6 +65,7 @@ def score_candidate(
     candidate: HybridCandidate,
     story: StoryMetadata,
     extraction: EntityExtraction,
+    query_sparse_weights: Mapping[str, float] | None = None,
     *,
     now: datetime,
     dense_limit: int,
@@ -58,7 +78,10 @@ def score_candidate(
 ) -> StoryMatchScore:
     """Calculate one candidate's component and weighted final scores."""
     semantic = semantic_score(candidate.dense_score)
-    lexical = rank_score(candidate.lexical_rank, lexical_limit)
+    lexical = bge_lexical_score(query_sparse_weights or {}, story.sparse_weights)
+    if lexical == 0.0 and (not query_sparse_weights or not story.sparse_weights):
+        # Retain FTS5 as a compatibility fallback for legacy stories without sparse profiles.
+        lexical = rank_score(candidate.lexical_rank, lexical_limit)
     entities = entity_score(extraction, story)
     temporal = temporal_score(now, story)
     final = (

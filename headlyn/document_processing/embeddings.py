@@ -7,6 +7,7 @@ from FlagEmbedding import BGEM3FlagModel
 
 from .canonical import build_canonical_text, document_fingerprint
 from .models import EncodedDocument, StoryDocument
+from .vector_store import DocumentVectorStore
 
 
 class DocumentEncoder(Protocol):
@@ -80,6 +81,52 @@ class BgeM3DocumentEncoder:
                 )
             )
         return results
+
+
+class CachedDocumentEncoder:
+    """Reuse compatible document features and encode only cache misses."""
+
+    def __init__(
+        self,
+        encoder: DocumentEncoder,
+        vector_store: DocumentVectorStore,
+        *,
+        vector_size: int = 1024,
+        max_length: int = 512,
+    ) -> None:
+        """Configure a persistent feature cache around an existing encoder."""
+        if vector_size < 1 or max_length < 1:
+            raise ValueError("vector_size and max_length must be positive")
+        self.encoder = encoder
+        self.vector_store = vector_store
+        self.model_name = encoder.model_name
+        self.vector_size = vector_size
+        self.max_length = max_length
+
+    def encode(self, documents: Sequence[StoryDocument]) -> list[EncodedDocument]:
+        """Load cache hits, encode misses, persist them, and restore input order."""
+        if not documents:
+            return []
+
+        # Ensure the stable Qdrant collection exists before looking up features.
+        self.vector_store.initialize(self.vector_size)
+        cached = self.vector_store.get_many(
+            documents,
+            model_name=self.model_name,
+            max_length=self.max_length,
+        )
+        missing = [document for document in documents if document.document_id not in cached]
+
+        # Invoke BGE-M3 only for documents absent from, or incompatible with, the cache.
+        generated = self.encoder.encode(missing) if missing else []
+        for encoded in generated:
+            self.vector_store.upsert(encoded)
+            cached[encoded.document_id] = encoded
+
+        if len(cached) != len(documents):
+            missing_ids = [document.document_id for document in documents if document.document_id not in cached]
+            raise RuntimeError(f"document embedding cache did not produce features: {missing_ids}")
+        return [cached[document.document_id] for document in documents]
 
 
 def finite_float(value: object, label: str) -> float:

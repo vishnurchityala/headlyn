@@ -7,6 +7,9 @@ from typing import Literal
 from headlyn.document_processing.models import EncodedDocument, EntityExtraction, StoryDocument
 
 
+THRESHOLD_BINS = (0.60, 0.65, 0.70, 0.75, 0.80)
+
+
 @dataclass(frozen=True)
 class PreparedDocument:
     """A validated source document with its embedding and entity results."""
@@ -79,10 +82,10 @@ class StoryClusteringConfig:
     run_id: str
     artifact_root: Path | None = None
     match_threshold: float = 0.70
-    semantic_weight: float = 0.50
-    lexical_weight: float = 0.25
-    entity_weight: float = 0.20
-    temporal_weight: float = 0.05
+    semantic_weight: float = 0.7
+    lexical_weight: float = 0.15
+    entity_weight: float = 0.15
+    temporal_weight: float = 0.0
     active_window_hours: int = 72
     dense_limit: int = 20
     lexical_limit: int = 20

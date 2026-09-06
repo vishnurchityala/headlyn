@@ -1,180 +1,181 @@
-# Headlyn — Current Chat Context
+# Headlyn — Current Implementation Context
 
-## Project pivot
+## Product goal
 
-Headlyn has pivoted from a complex news canonicalization system to a daily
-newsletter. The active goal is to aggregate multiple RSS/feed sources,
-normalize related reports into story clusters, rewrite the selected stories
-with a local LLM, and send one concise briefing to users by email. The initial
-sourcing scope is India for general news, while Technology & Science and Sports
-can include worldwide developments.
+Headlyn aggregates RSS news, groups reports about the same event into stories,
+rewrites selected stories with a local Gemma model, and produces one shared
+daily newsletter. The initial source scope is India-focused general news;
+Technology & Science and Sports may include global coverage.
 
-The earlier work explored article embeddings, chunking, hybrid retrieval,
-pairwise scoring, graph construction, and story clustering. That work is now
-legacy research. It should not be extended as part of the newsletter product
-unless the product direction is explicitly changed again.
-
-## Product promise
-
-Deliver a useful shared morning briefing that answers: “What are the important
-headlines I should know today?” General news begins with India-only coverage;
-Technology & Science and Sports can cover important worldwide developments.
-The edition should be quick to scan, balanced across publishers, and honest
-about its relationship to the source reporting.
-
-## Reader experience
-
-- One shared edition for all subscribers in v1.
-- India-only coverage for National, Politics, Business & Economy, and Other.
-- Worldwide coverage is allowed for Technology & Science and Sports.
-- Morning delivery, with India Standard Time as the working default.
-- Approximately 8–10 items for a five-minute read.
-- Items organized into topic sections.
-- Each item shows a headline, short source description, publisher, publication
-  time, and link to the original article.
-- Empty topic sections are omitted.
-
-Suggested sections:
-
-1. National
-2. Politics
-3. Business & Economy
-4. Technology & Science
-5. World
-6. Sports
-7. Other
-
-These are presentation sections, not story clusters. Story normalization may
-combine reports about the same event into one source-linked story, while
-unrelated reports remain separate newsletter stories.
-
-## End-to-end product flow
+## Active end-to-end flow
 
 ```text
-RSS/feed sources
-  → collect the current day's items
-  → validate required metadata
-  → lightly clean descriptions and titles
-  → remove exact duplicate URLs/titles
-  → normalize same-event articles into source-linked stories
-  → rewrite and classify stories with Gemma
-  → choose a balanced daily set
-  → assign topic sections
-  → render the shared edition
-  → deliver by email
+RSS/article inputs
+  → adapter validation
+  → canonical text
+  → BGE-M3 dense and sparse features
+  → Gemma entity extraction
+  → cached document features
+  → chronological story clustering
+  → story selection and rewriting
+  → topic sections
+  → HTML/text newsletter
+  → preview or Mailjet delivery
 ```
 
-The first implementation stage is a concurrent RSS ingestion pipeline. It is
-live by default and can replay checked-in RSS snapshots. It produces normalized
-RSS item records and run diagnostics under `artifacts/stages/`. It never fetches
-article pages.
+Video document models and adapters exist, but video sourcing and ingestion are
+not active in the current phase.
 
-### Source aggregation
+## Document preparation
 
-The active source pool contains Firstpost, The Indian Express, NDTV, and
-Hindustan Times India News. RSS is the primary input. Every source retains its
-publisher identity and direct article link for the final edition.
+`StoryDocument` is the shared input model for RSS articles and pre-sourced
+videos. Adapters validate required fields and build a canonical representation
+from title plus body/summary.
 
-The source registry stores each source's website, RSS URL, scope, and category.
-These four feeds are currently configured as `india-general`; worldwide
-Technology & Science or Sports feeds can be added later without changing the
-normalized item contract.
+Document preparation produces:
 
-### Freshness and validation
+- normalized document records;
+- BGE-M3 normalized dense vectors;
+- BGE-M3 sparse lexical weights;
+- Gemma entity results in CSV-derived internal entity records; and
+- `document_features.jsonl` for downstream clustering.
 
-An item should be considered valid only when it has a usable headline,
-description, source, publication timestamp, and original URL. The daily run
-should select items from the intended morning edition window and retain enough
-metadata to diagnose feed failures or stale content.
+The persistent Qdrant document collection caches embeddings and successful
+entity extractions. Cache compatibility requires the same document fingerprint,
+model, and relevant configuration (`max_length` for embeddings, prompt version
+for entities). Failed entity extractions are not cached.
 
-The ingestion pipeline writes a feed snapshot, normalized RSS JSONL, and
-source summary under `artifacts/stages/rss_ingestion/<run_id>/<source_id>/`,
-plus a run summary under `artifacts/stages/rss_ingestion/<run_id>/summary.json`.
+## Streaming story clustering
 
-### Cleanup and duplicate handling
+Documents are sorted by publication time and processed serially. Each document
+searches only active story representations:
 
-Cleanup is intentionally light: strip feed HTML, normalize whitespace, and
-truncate descriptions only as needed for email readability. Remove duplicate
-URLs and repeated normalized titles. Same-day articles may then be normalized
-into one source-linked story by the story-normalization stage, which uses the
-local Gemma 4 model for entity extraction and BGE-M3 sparse lexical matching. It does not
-fetch article pages or create new prose.
+1. Qdrant retrieves dense candidates.
+2. SQLite FTS5 retrieves lexical candidates.
+3. Candidate lists are unioned and deduplicated.
+4. Each candidate is scored with semantic, BGE sparse lexical, and entity
+   overlap signals.
+5. The best candidate is attached when its score reaches the cutoff; otherwise
+   a singleton story is created.
 
-Each concurrent source task writes only its own source directory, avoiding
-shared-file collisions. A failed source is recorded in its own summary while
-healthy sources continue; the overall run is marked `partial` when appropriate.
+Current production configuration:
 
-### Selection and balance
+```text
+semantic weight: 0.70
+lexical weight:  0.15
+entity weight:   0.15
+match threshold: 0.70
+```
 
-Selection should prioritize useful, current items within each section's
-geographic scope while avoiding publisher concentration. When enough content
-exists, aim for at least four publishers and cap a publisher at roughly three
-selected items. Topic balance should guide the edition, but weak or repetitive
-items should not be included merely to fill a section.
+The score is:
 
-### Newsletter rewriting, rendering, and delivery
+```text
+0.70 × semantic_score
++ 0.15 × lexical_score
++ 0.15 × entity_score
+```
 
-The newsletter stage consumes `newsletter_stories.json` and asks the local
-Gemma model for a grounded headline, 30–70 word summary, and one controlled
-topic section. The prompt receives every article title, description, and
-publisher in the story cluster. Failed rewrites fall back to the
-representative RSS title and description.
+Temporal scoring remains available but is currently weighted at zero. Stories
+are closed after the configured inactivity window, currently 72 hours.
 
-The email has a clear date/header, short introduction, topic sections, source
-attribution, representative original links, and a footer. It is rendered as
-both HTML and plain text. Preview is the default; Mailjet delivery is explicit and
-uses environment-based Mailjet settings for an internal/test recipient
-list. Sending is idempotent by edition date and supports an explicit forced
-resend.
+When a document is attached, story state is updated using:
 
-Newsletter artifacts are written under
-`artifacts/stages/daily_newsletter/<edition_date>/` and include rewrites,
-selection diagnostics, JSON edition data, HTML/text bodies, delivery state, and
-a summary. Recipient addresses are not persisted in artifacts.
+- mean of all member dense vectors;
+- element-wise maximum of all member sparse weights;
+- union of all member entity names; and
+- the latest article as the newsletter/display representative.
 
-## Reliability and failure behavior
+The story state of record is SQLite. Qdrant stores the searchable story vector
+and compact payload. Assignment diagnostics and newsletter-compatible story
+artifacts are written under `artifacts/stages/story_clustering/<run_id>/`.
 
-- A failed feed should not necessarily fail the whole run.
-- Healthy feeds may produce the edition when one or more sources are down.
-- Fewer than five valid items should result in a failed or held edition rather
-  than a misleadingly empty email.
-- The run should retain enough logs/output to explain source failures, item
-  counts, duplicate removal, selection, and delivery status.
-- A shared edition should be deterministic after selection so all subscribers
-  receive the same content.
+The former `headlyn/story_normalization/` implementation is legacy research;
+the active path is `document_processing` → `story_clustering` → `story_index`.
 
-## Success criteria
+## Dataset results and selected operating point
 
-The first newsletter workflow is successful when it can consistently produce a
-morning edition with:
+The phase 0 dataset contains 170 articles and 14,365 pair annotations:
 
-- 8–10 valid items when source inventory permits;
-- at least four publishers when possible;
-- no exact duplicate URLs or normalized titles;
-- a headline, readable description, source, timestamp, and link for every item;
-- clear, non-empty topic sections;
-- a safe failure state when content is insufficient; and
-- the same edition for every subscriber.
+```text
+same_story: 146
+unrelated:  14,147
+related:    72
+```
 
-## Explicitly out of scope
+The selected weights were evaluated across cutoff values:
 
-Do not treat the following as requirements for the current product:
+| Threshold | Precision | Recall | F1 | False merges | Missed same-story |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0.60 | 0.1818 | 0.8493 | 0.2995 | 558 | 22 |
+| 0.65 | 0.5491 | 0.6507 | 0.5956 | 78 | 51 |
+| **0.70** | **0.8763** | **0.5822** | **0.6996** | **12** | **61** |
+| 0.75 | 0.9697 | 0.2192 | 0.3575 | 1 | 114 |
+| 0.80 | 1.0000 | 0.0548 | 0.1039 | 0 | 138 |
 
-- dense embeddings and semantic similarity scoring;
-- article chunking and chunk-level aggregation;
-- semantic retrieval and graph clustering;
-- cross-day story timelines;
-- personalized feeds or personalized newsletter editions;
-- production subscriber management, campaign automation, and website
-  delivery.
+`0.70` is the current operating point because it produced the best F1 and a
+practical precision/recall balance. Lower thresholds caused excessive false
+merges; higher thresholds missed too many same-story pairs.
 
-## Repository context
+Evaluation commands:
 
-- [`README.md`](./README.md) contains the current product contract.
-- [`NOTES.md`](./NOTES.md) records product decisions and open questions.
-- [`assets/rss-feeds/raw/`](./assets/rss-feeds/raw/) contains RSS snapshots.
-- [`headlyn/ingestion/`](./headlyn/ingestion/) contains the registry and pipeline.
-- [`tests/`](./tests/) contains deterministic ingestion contract tests.
-- [`artifacts/stages/`](./artifacts/stages/) contains ignored stage outputs.
-- Existing clustering artifacts are historical and not active runtime
-  requirements.
+```bash
+python -m unittest tests.test_story_clustering_dataset -v
+
+python scripts/evaluate_story_clusters.py \
+  --stories artifacts/stages/story_clustering/phase0-real-dataset-test/newsletter_stories.json \
+  --annotations assets/datasets/phase0/pair_annotations.json \
+  --output artifacts/evaluations/phase0-story-clustering.json
+
+python scripts/run_story_threshold_sweep.py \
+  --features artifacts/stages/document_preparation/phase0-real-dataset-test/document_features.jsonl \
+  --annotations assets/datasets/phase0/pair_annotations.json \
+  --output artifacts/evaluations/threshold-sweep.json
+```
+
+The sweep reuses prepared features and creates a fresh story index per
+threshold. It does not regenerate BGE or entity features.
+
+## Newsletter flow
+
+```text
+active clustered stories
+  → balanced source/topic selection
+  → Gemma headline and summary rewrite
+  → controlled topic classification
+  → HTML and plain-text rendering
+  → preview or explicit Mailjet send
+```
+
+The newsletter keeps source attribution, publication time, original URL, and
+cluster membership. Failed rewrites fall back to the representative source
+title and description. Preview is the default; sending is explicit and
+environment-configured.
+
+## Current risks and next ideas
+
+- Recall remains limited: the selected operating point misses 61 labelled
+  same-story pairs.
+- BGE sparse score calibration should be improved before increasing lexical
+  weight again; its scale is materially lower than semantic scores.
+- Candidate retrieval should be evaluated separately from reranking so a
+  valid story absent from the dense/FTS candidate union is distinguishable from
+  a candidate rejected by scoring.
+- Entity normalization and alias handling can improve cross-source overlap.
+- A periodic active-story merge pass can repair early singleton decisions.
+- Assignment diagnostics should retain top rejected candidates and component
+  scores for false-negative analysis.
+- Qdrant and Ollama availability should be health-checked before long dataset
+  runs; local-service timeouts can otherwise produce partial runs.
+
+## Repository anchors
+
+- `headlyn/document_processing/`: adapters, canonical text, embeddings,
+  entities, caches, and preparation artifacts.
+- `headlyn/story_clustering/`: scoring, assignment, lifecycle, and artifacts.
+- `headlyn/story_index/`: Qdrant and SQLite state adapters.
+- `headlyn/newsletter/`: selection, rewriting, rendering, and delivery.
+- `scripts/evaluate_story_clusters.py`: labelled-pair evaluation.
+- `scripts/run_story_threshold_sweep.py`: threshold calibration.
+- `tests/test_story_clustering_dataset.py`: real-model dataset integration run.
+- `README.md`: concise setup, flow, and reported results.
+- `.env.example`: Qdrant, Ollama, and optional Mailjet configuration.

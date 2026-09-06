@@ -8,6 +8,9 @@ from .models import (
     ExtractedEntity,
     StoryDocument,
 )
+from .entities import CachedEntityExtractor, EntityCache
+from .embeddings import CachedDocumentEncoder
+from .vector_store import DocumentVectorStore, QdrantDocumentVectorStore
 
 __all__ = [
     "DocumentPreparationConfig",
@@ -16,4 +19,9 @@ __all__ = [
     "EntityExtraction",
     "ExtractedEntity",
     "StoryDocument",
+    "CachedDocumentEncoder",
+    "CachedEntityExtractor",
+    "EntityCache",
+    "DocumentVectorStore",
+    "QdrantDocumentVectorStore",
 ]

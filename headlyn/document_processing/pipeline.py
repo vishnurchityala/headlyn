@@ -9,8 +9,8 @@ from headlyn.ingestion.artifacts import write_json, write_jsonl
 
 from .adapters import RssArticleAdapter, VideoDocumentAdapter
 from .canonical import document_fingerprint
-from .embeddings import BgeM3DocumentEncoder, DocumentEncoder
-from .entities import EntityExtractor, OllamaEntityExtractor
+from .embeddings import BgeM3DocumentEncoder, CachedDocumentEncoder, DocumentEncoder
+from .entities import CachedEntityExtractor, EntityExtractor, OllamaEntityExtractor
 from .models import (
     DocumentPreparationConfig,
     DocumentPreparationResult,
@@ -18,6 +18,7 @@ from .models import (
     EntityExtraction,
     StoryDocument,
 )
+from .vector_store import DocumentVectorStore
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -31,6 +32,7 @@ def run_document_preparation(
     documents: list[StoryDocument],
     invalid_input_count: int = 0,
     encoder: DocumentEncoder | None = None,
+    document_vector_store: DocumentVectorStore | None = None,
     entity_extractor: EntityExtractor | None = None,
 ) -> DocumentPreparationResult:
     """Prepare caller-provided documents and write downstream-ready artifacts."""
@@ -52,6 +54,13 @@ def run_document_preparation(
         max_length=config.embedding_max_length,
         use_fp16=config.use_fp16,
     )
+    if document_vector_store is not None:
+        encoder_instance = CachedDocumentEncoder(
+            encoder_instance,
+            document_vector_store,
+            vector_size=config.embedding_vector_size,
+            max_length=config.embedding_max_length,
+        )
     extractor = entity_extractor or OllamaEntityExtractor(
         model_name=config.entity_model,
         endpoint=config.llm_endpoint,
@@ -59,6 +68,8 @@ def run_document_preparation(
         retries=config.llm_retries,
         prompt_version=config.entity_prompt_version,
     )
+    if document_vector_store is not None:
+        extractor = CachedEntityExtractor(extractor, document_vector_store)
 
     # Produce dense/sparse embeddings and independent entity results.
     embeddings, embedding_errors = encode_documents(documents, encoder_instance)
@@ -217,6 +228,12 @@ def extract_entities(
     extractor: EntityExtractor,
 ) -> dict[str, EntityExtraction]:
     """Extract entities per document and convert exceptions to failed results."""
+    if isinstance(extractor, CachedEntityExtractor):
+        try:
+            return extractor.extract_many(documents)
+        except Exception:
+            # Preserve per-document failure reporting if the cache backend is unavailable.
+            pass
     result: dict[str, EntityExtraction] = {}
     for document in documents:
         # Keep entity failure local to the document while preserving its fingerprint.
@@ -241,8 +258,8 @@ def validate_config(config: DocumentPreparationConfig) -> None:
         raise ValueError("ingestion_run_id is required")
     if config.llm_timeout_seconds < 1 or config.llm_retries < 0:
         raise ValueError("invalid LLM timeout or retry count")
-    if config.embedding_batch_size < 1 or config.embedding_max_length < 1:
-        raise ValueError("embedding batch size and max length must be positive")
+    if config.embedding_batch_size < 1 or config.embedding_max_length < 1 or config.embedding_vector_size < 1:
+        raise ValueError("embedding batch size, max length, and vector size must be positive")
     if config.video_input and not config.video_input.exists():
         raise FileNotFoundError(f"video input not found: {config.video_input}")
 

@@ -71,6 +71,7 @@ class StoryClusterer:
                     candidate,
                     story,
                     prepared.entities,
+                    query_sparse_weights=prepared.encoded.sparse_weights,
                     now=now,
                     dense_limit=self.config.dense_limit,
                     lexical_limit=self.config.lexical_limit,

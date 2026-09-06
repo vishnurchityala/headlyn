@@ -25,6 +25,18 @@ def document_payload(prepared: PreparedDocument) -> dict[str, object]:
     return payload
 
 
+def updated_sparse_weights(
+    old_weights: dict[str, float],
+    new_weights: dict[str, float],
+) -> dict[str, float]:
+    """Maintain an element-wise maximum BGE-M3 sparse profile for a story."""
+    keys = set(old_weights) | set(new_weights)
+    return {
+        key: max(float(old_weights.get(key, 0.0)), float(new_weights.get(key, 0.0)))
+        for key in keys
+    }
+
+
 def create_singleton(prepared: PreparedDocument, now: datetime) -> StoryMetadata:
     """Create a deterministic active story containing one prepared document."""
     # Derive a stable ID so retries cannot create a second singleton.
@@ -43,6 +55,8 @@ def create_singleton(prepared: PreparedDocument, now: datetime) -> StoryMetadata
         entity_names=sorted({entity.canonical_name for entity in prepared.entities.entities}),
         category=prepared.document.category,
         centroid=normalized_centroid(list(prepared.encoded.dense_vector)),
+        dense_sum=tuple(prepared.encoded.dense_vector),
+        sparse_weights=dict(prepared.encoded.sparse_weights),
         member_documents=[document_payload(prepared)],
     )
 
@@ -56,18 +70,14 @@ def attach_document(
     if prepared.document.document_id in story.member_document_ids:
         return story
     old_count = story.document_count
-    old_centroid = list(story.centroid or prepared.encoded.dense_vector)
+    old_dense_sum = list(story.dense_sum or story.centroid or prepared.encoded.dense_vector)
     new_vector = list(prepared.encoded.dense_vector)
-    if len(old_centroid) != len(new_vector):
-        raise ValueError("document vector dimension does not match story centroid")
+    if len(old_dense_sum) != len(new_vector):
+        raise ValueError("document vector dimension does not match story dense sum")
 
-    # Update the running centroid with the new document embedding.
-    centroid = normalized_centroid(
-        [
-            (old_count * old_value + new_value) / (old_count + 1)
-            for old_value, new_value in zip(old_centroid, new_vector)
-        ]
-    )
+    # Add the new vector to the unnormalized sum, then derive the exact mean centroid.
+    dense_sum = [old_value + new_value for old_value, new_value in zip(old_dense_sum, new_vector)]
+    centroid = normalized_centroid([value / (old_count + 1) for value in dense_sum])
 
     # Preserve all member records and update the newest display representative.
     member_documents = list(story.member_documents) + [document_payload(prepared)]
@@ -96,5 +106,10 @@ def attach_document(
         merged_story_ids=list(story.merged_story_ids),
         category=story.category or prepared.document.category,
         centroid=centroid,
+        dense_sum=tuple(dense_sum),
+        sparse_weights=updated_sparse_weights(
+            story.sparse_weights,
+            dict(prepared.encoded.sparse_weights),
+        ),
         member_documents=member_documents,
     )

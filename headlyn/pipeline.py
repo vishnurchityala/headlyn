@@ -10,16 +10,24 @@ from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
+from .document_processing.embeddings import DocumentEncoder
+from .document_processing.entities import EntityExtractor
 from .ingestion.models import PipelineConfig
 from .ingestion.pipeline import run_pipeline as run_ingestion_pipeline
 from .newsletter.delivery import MailSender
 from .newsletter.models import NewsletterConfig, NewsletterResult
 from .newsletter.pipeline import run_newsletter
 from .newsletter.rewrite import StoryRewriter
-from .story_normalization.lexical import LexicalScorer
-from .story_normalization.llm import EntityExtractor
-from .story_normalization.models import StoryNormalizationConfig
-from .story_normalization.pipeline import run_story_normalization
+from .document_processing.models import DocumentPreparationConfig
+from .document_processing.pipeline import load_documents, run_document_preparation
+from .document_processing.vector_store import QdrantDocumentVectorStore
+from .story_clustering.models import PreparedDocument, StoryClusteringConfig
+from .story_clustering.pipeline import run_story_clustering
+from .story_clustering.preparation import prepared_document_from_dict
+from .story_index.config import StoryIndexConfig
+from .story_index.hybrid_index import HybridStoryIndex
+from .story_index.qdrant_store import QdrantStoryStore
+from .story_index.sqlite_store import SQLiteStoryStore
 from .tls import configure_ca_bundle
 
 
@@ -40,10 +48,18 @@ class DailyPipelineConfig:
     entity_model: str = "gemma4:e4b-it-q4_K_M"
     llm_endpoint: str = "http://127.0.0.1:11434/api/generate"
     llm_timeout_seconds: int = 120
-    lexical_model: str = "BAAI/bge-m3"
-    entity_weight: float = 0.5
-    lexical_weight: float = 0.5
-    merge_threshold: float = 0.5
+    embedding_model: str = "BAAI/bge-m3"
+    embedding_batch_size: int = 16
+    embedding_max_length: int = 512
+    use_fp16: bool = False
+    semantic_weight: float = 0.7
+    lexical_weight: float = 0.15
+    entity_weight: float = 0.15
+    temporal_weight: float = 0.0
+    match_threshold: float = 0.70
+    active_window_hours: int = 72
+    dense_limit: int = 20
+    lexical_limit: int = 20
     newsletter_model: str = "gemma4:e4b-it-q4_K_M"
     target_items: int = 10
     minimum_items: int = 5
@@ -63,14 +79,14 @@ class DailyPipelineResult:
 def run_pipeline(
     config: DailyPipelineConfig,
     *,
+    encoder: DocumentEncoder | None = None,
     entity_extractor: EntityExtractor | None = None,
-    lexical_scorer: LexicalScorer | None = None,
     rewriter: StoryRewriter | None = None,
     sender: MailSender | None = None,
 ) -> DailyPipelineResult:
     # Load local credentials/configuration when the pipeline is run directly.
     # Existing shell variables take precedence over values in .env.
-    load_dotenv(ROOT_DIR / ".env", override=False)
+    load_dotenv(override=False)
     configure_ca_bundle()
     artifact_root = config.artifact_root or DEFAULT_ARTIFACT_ROOT
     if config.story_run_id:
@@ -89,21 +105,57 @@ def run_pipeline(
         if ingestion.status == "failed":
             raise RuntimeError("daily pipeline cannot continue after ingestion failure")
         story_run_id = ingestion.run_id
-        run_story_normalization(
-            StoryNormalizationConfig(
-                ingestion_run_id=story_run_id,
-                artifact_root=artifact_root,
-                entity_model=config.entity_model,
-                llm_endpoint=config.llm_endpoint,
-                llm_timeout_seconds=config.llm_timeout_seconds,
-                lexical_model=config.lexical_model,
-                entity_weight=config.entity_weight,
-                lexical_weight=config.lexical_weight,
-                merge_threshold=config.merge_threshold,
-            ),
-            entity_extractor=entity_extractor,
-            lexical_scorer=lexical_scorer,
+        preparation_config = DocumentPreparationConfig(
+            ingestion_run_id=story_run_id,
+            artifact_root=artifact_root,
+            source_ids=config.source_ids,
+            embedding_model=config.embedding_model,
+            entity_model=config.entity_model,
+            llm_endpoint=config.llm_endpoint,
+            llm_timeout_seconds=config.llm_timeout_seconds,
+            embedding_batch_size=config.embedding_batch_size,
+            embedding_max_length=config.embedding_max_length,
+            use_fp16=config.use_fp16,
         )
+        documents, invalid_inputs = load_documents(
+            artifact_root / "rss_ingestion" / story_run_id,
+            preparation_config,
+        )
+        index_config = StoryIndexConfig.from_env()
+        preparation = run_document_preparation(
+            preparation_config,
+            documents=documents,
+            invalid_input_count=invalid_inputs,
+            encoder=encoder,
+            document_vector_store=QdrantDocumentVectorStore(index_config),
+            entity_extractor=entity_extractor,
+        )
+        prepared_documents = load_prepared_documents(preparation.output_dir / "document_features.jsonl")
+        state_store = SQLiteStoryStore(index_config.sqlite_path)
+        story_index = HybridStoryIndex(
+            index_config,
+            dense_store=QdrantStoryStore(index_config),
+            state_store=state_store,
+        )
+        try:
+            run_story_clustering(
+                StoryClusteringConfig(
+                    run_id=story_run_id,
+                    artifact_root=artifact_root,
+                    match_threshold=config.match_threshold,
+                    semantic_weight=config.semantic_weight,
+                    lexical_weight=config.lexical_weight,
+                    entity_weight=config.entity_weight,
+                    temporal_weight=config.temporal_weight,
+                    active_window_hours=config.active_window_hours,
+                    dense_limit=config.dense_limit,
+                    lexical_limit=config.lexical_limit,
+                ),
+                documents=prepared_documents,
+                index=story_index,
+            )
+        finally:
+            state_store.close()
     newsletter = run_newsletter(
         NewsletterConfig(
             story_run_id=story_run_id,
@@ -147,10 +199,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--newsletter-model", default="gemma4:e4b-it-q4_K_M")
     parser.add_argument("--llm-endpoint", default="http://127.0.0.1:11434/api/generate")
     parser.add_argument("--llm-timeout-seconds", type=int, default=120)
-    parser.add_argument("--lexical-model", default="BAAI/bge-m3")
-    parser.add_argument("--entity-weight", type=float, default=0.5)
-    parser.add_argument("--lexical-weight", type=float, default=0.5)
-    parser.add_argument("--merge-threshold", type=float, default=0.5)
+    parser.add_argument("--embedding-model", "--lexical-model", dest="embedding_model", default="BAAI/bge-m3")
+    parser.add_argument("--temporal-weight", type=float, default=0.0)
+    parser.add_argument("--semantic-weight", type=float, default=0.7)
+    parser.add_argument("--lexical-weight", type=float, default=0.15)
+    parser.add_argument("--entity-weight", type=float, default=0.15)
+    parser.add_argument("--match-threshold", "--merge-threshold", dest="match_threshold", type=float, default=0.70)
+    parser.add_argument("--embedding-batch-size", type=int, default=16)
+    parser.add_argument("--embedding-max-length", type=int, default=512)
+    parser.add_argument("--use-fp16", action="store_true")
     parser.add_argument("--target-items", type=int, default=10)
     parser.add_argument("--minimum-items", type=int, default=5)
     parser.add_argument("--max-items-per-source", type=int, default=3)
@@ -177,10 +234,15 @@ def main(argv: list[str] | None = None) -> int:
                 newsletter_model=args.newsletter_model,
                 llm_endpoint=args.llm_endpoint,
                 llm_timeout_seconds=args.llm_timeout_seconds,
-                lexical_model=args.lexical_model,
+                embedding_model=args.embedding_model,
+                embedding_batch_size=args.embedding_batch_size,
+                embedding_max_length=args.embedding_max_length,
+                use_fp16=args.use_fp16,
+                semantic_weight=args.semantic_weight,
                 entity_weight=args.entity_weight,
                 lexical_weight=args.lexical_weight,
-                merge_threshold=args.merge_threshold,
+                temporal_weight=args.temporal_weight,
+                match_threshold=args.match_threshold,
                 target_items=args.target_items,
                 minimum_items=args.minimum_items,
                 max_items_per_source=args.max_items_per_source,
@@ -205,6 +267,17 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
     return 0 if result.newsletter.status in {"preview", "sent", "held"} else 1
+
+
+def load_prepared_documents(path: Path) -> list[PreparedDocument]:
+    """Load validated document features produced by the preparation stage."""
+    if not path.exists():
+        raise FileNotFoundError(f"prepared document features not found: {path}")
+    return [
+        prepared_document_from_dict(json.loads(line))
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
 
 if __name__ == "__main__":
